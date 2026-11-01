@@ -1,0 +1,59 @@
+# Local assistant instructions (never version or include in release archives)
+[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]
+
+# C++ build products
+/build/
+/build-*/
+/cmake-build-*/
+/out/
+CMakeUserPresets.json
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+*.pdb
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+
+# Frontend dependencies and builds
+node_modules/
+/frontend/dist/
+
+# Local configuration
+.env
+.env.*
+!.env.example
+*.log
+
+# LaTeX intermediate files (retain .tex, references, figures, and intended PDFs)
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.toc
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Do not ignore all CSV/JSON files: inputs, configs, and raw benchmark data
+# required for reproducibility will be selected and versioned deliberately.
