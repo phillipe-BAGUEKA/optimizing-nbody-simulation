@@ -2,7 +2,7 @@
 
 Implementation, profiling, and optimization of direct 3D N-body simulations in C++20 with OpenMP.
 
-**Status:** project framing. The repository currently contains planning documents only. The simulator, benchmarks, interface, and report have not been implemented or validated yet.
+**Status:** milestone 0 toolchain setup. The repository contains planning documents and a standalone C++20/OpenMP build check. The simulator, benchmarks, interface, and report have not been implemented or validated yet.
 
 ## Objectives
 
@@ -56,6 +56,38 @@ Conversation and coaching are in French. Code identifiers, public technical docu
 Initial conditions, physical parameters, numerical settings, thread counts, compiler settings, and machine information will be recorded. Performance comparisons will use identical inputs and simulation settings. Visualization and trajectory export will be outside the timed simulation region.
 
 No benchmark results or performance claims are available yet.
+
+## Milestone 0 build check
+
+The current executable is an OpenMP toolchain check, not the N-body simulator. Run the following commands from an MSYS2 UCRT64 shell:
+
+```bash
+cd /c/Users/loicp/Documents/I3/02-C++/000-PROJECT/n_body
+
+cmake --preset ucrt64-debug
+cmake --build --preset ucrt64-debug
+ctest --preset ucrt64-debug
+./build/ucrt64-debug/openmp_smoke_check.exe
+```
+
+Use the Release preset to verify an optimized build:
+
+```bash
+cmake --preset ucrt64-release
+cmake --build --preset ucrt64-release
+ctest --preset ucrt64-release
+./build/ucrt64-release/openmp_smoke_check.exe
+```
+
+Debug keeps information useful to GDB. Release enables compiler optimizations and is the appropriate starting point for later performance measurements.
+
+Start an interactive debugging session with the Debug executable:
+
+```bash
+gdb ./build/ucrt64-debug/openmp_smoke_check.exe
+```
+
+The verified local toolchain and machine details are recorded in [docs/development-environment.md](docs/development-environment.md).
 
 ## Submission
 

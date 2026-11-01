@@ -14,8 +14,8 @@ Codex handles local cloning, environment inspection, and setup commands directly
 
 - [x] Private GitHub repository created by the learner.
 - [x] Repository access verified and initial project framing added.
-- [ ] Local clone and Windows/MSYS2 UCRT64 toolchain verified.
-- [ ] C++20/OpenMP build smoke check completed on the learner's computer.
+- [x] Local clone and Windows/MSYS2 UCRT64 toolchain verified.
+- [x] C++20/OpenMP build smoke check completed on the learner's computer.
 - [ ] Physical model and numerical choices explained and agreed.
 - [ ] Sequential or parallel simulator implemented.
 - [ ] Numerical or performance results produced.
