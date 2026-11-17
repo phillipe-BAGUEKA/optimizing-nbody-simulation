@@ -1,0 +1,180 @@
+#include "nbody/gravity.hpp"
+#include "gravity_kernel.hpp"
+
+#include <cmath>
+#include <cstddef>
+#include <limits>
+#include <stdexcept>
+
+#include <omp.h>
+
+namespace nbody
+{
+namespace
+{
+
+bool is_finite(const Vec3& value)
+{
+    return std::isfinite(value.x)
+        && std::isfinite(value.y)
+        && std::isfinite(value.z);
+}
+
+Vec3 gravitational_contribution(
+    const Body& target,
+    const Body& source,
+    const GravityParameters& parameters
+)
+{
+    const Vec3 displacement = source.position - target.position;
+    const double q = displacement.squared_norm()
+        + parameters.softening * parameters.softening;
+    const double denominator = q * std::sqrt(q);
+    const double numerator = parameters.gravitational_constant * source.mass;
+
+    if (!std::isfinite(denominator) || denominator <= 0.0
+        || !std::isfinite(numerator))
+    {
+        // Never throw through an OpenMP region. The caller checks outputs afterwards.
+        const double invalid = std::numeric_limits<double>::quiet_NaN();
+        return {invalid, invalid, invalid};
+    }
+
+    return displacement * (numerator / denominator);
+}
+
+Vec3 acceleration_for_target(
+    std::size_t target_index,
+    const std::vector<Body>& bodies,
+    const GravityParameters& parameters
+)
+{
+    Vec3 acceleration{};
+    for (std::size_t source_index = 0; source_index < bodies.size(); ++source_index)
+    {
+        if (source_index != target_index)
+        {
+            acceleration += gravitational_contribution(
+                bodies[target_index], bodies[source_index], parameters
+            );
+        }
+    }
+    return acceleration;
+}
+
+void validate_output_size(
+    const std::vector<Body>& bodies,
+    const std::vector<Vec3>& accelerations
+)
+{
+    if (accelerations.size() != bodies.size())
+    {
+        throw std::invalid_argument("Acceleration count must match body count.");
+    }
+}
+
+} // namespace
+
+void detail::validate_accelerations(const std::vector<Vec3>& accelerations)
+{
+    for (const Vec3& acceleration : accelerations)
+    {
+        if (!is_finite(acceleration))
+        {
+            throw std::overflow_error("Gravity calculation exceeded its numeric range.");
+        }
+    }
+}
+
+void validate_gravity_inputs(
+    const std::vector<Body>& bodies,
+    const GravityParameters& parameters
+)
+{
+    if (!std::isfinite(parameters.gravitational_constant)
+        || parameters.gravitational_constant <= 0.0)
+    {
+        throw std::invalid_argument("G must be finite and strictly positive.");
+    }
+    if (!std::isfinite(parameters.softening) || parameters.softening <= 0.0)
+    {
+        throw std::invalid_argument("Softening must be finite and strictly positive.");
+    }
+    for (const Body& body : bodies)
+    {
+        if (!std::isfinite(body.mass) || body.mass <= 0.0)
+        {
+            throw std::invalid_argument("Every mass must be finite and strictly positive.");
+        }
+        if (!is_finite(body.position) || !is_finite(body.velocity))
+        {
+            throw std::invalid_argument("Positions and velocities must be finite.");
+        }
+    }
+}
+
+void detail::fill_accelerations_sequential(
+    const std::vector<Body>& bodies,
+    const GravityParameters& parameters,
+    std::vector<Vec3>& accelerations
+)
+{
+    for (std::size_t target_index = 0; target_index < bodies.size(); ++target_index)
+    {
+        accelerations[target_index] = acceleration_for_target(target_index, bodies, parameters);
+    }
+}
+
+void detail::fill_accelerations_openmp(
+    const std::vector<Body>& bodies,
+    const GravityParameters& parameters,
+    std::vector<Vec3>& accelerations,
+    int* observed_thread_count
+)
+{
+    if (observed_thread_count != nullptr)
+    {
+        *observed_thread_count = 0;
+    }
+    const std::size_t body_count = bodies.size();
+    if (body_count == 0)
+    {
+        return;
+    }
+
+#pragma omp parallel for default(none) schedule(static) \
+    shared(bodies, parameters, accelerations, observed_thread_count) firstprivate(body_count)
+    for (std::size_t target_index = 0; target_index < body_count; ++target_index)
+    {
+        if (observed_thread_count != nullptr && target_index == 0)
+        {
+            // Exactly one iteration writes the diagnostic; it is read after the barrier.
+            *observed_thread_count = omp_get_num_threads();
+        }
+        accelerations[target_index] = acceleration_for_target(target_index, bodies, parameters);
+    }
+}
+
+void compute_accelerations_sequential(
+    const std::vector<Body>& bodies, const GravityParameters& parameters,
+    std::vector<Vec3>& accelerations
+)
+{
+    validate_gravity_inputs(bodies, parameters);
+    validate_output_size(bodies, accelerations);
+    detail::fill_accelerations_sequential(bodies, parameters, accelerations);
+    detail::validate_accelerations(accelerations);
+}
+
+void compute_accelerations_openmp(
+    const std::vector<Body>& bodies, const GravityParameters& parameters,
+    std::vector<Vec3>& accelerations, int* observed_thread_count
+)
+{
+    validate_gravity_inputs(bodies, parameters);
+    validate_output_size(bodies, accelerations);
+    detail::fill_accelerations_openmp(bodies, parameters, accelerations, observed_thread_count);
+    detail::validate_accelerations(accelerations);
+}
+
+} // namespace nbody

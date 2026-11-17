@@ -1,0 +1,41 @@
+--- Process 26300 created from C:\Users\loicp\Documents\I3\02-C++\000-PROJECT\n_body\build\ucrt64-profile\nbody_benchmark.exe
+--- Process 26300 thread 50272 created at 0x0
+*** start profiler thread on pid 26300
+*** Windows process 26300 attached
+--- Process 26300 loaded C:\Windows\System32\ntdll.dll at 0x7ffa8e1f0000
+--- Process 26300 thread 49472 created at 0x7ffa8e214990
+--- Process 26300 thread 29532 created at 0x7ffa8e214990
+--- Process 26300 thread 37320 created at 0x7ffa8e214990
+--- Process 26300 thread 52064 created at 0x7ffa8b50cd00
+--- Process 26300 thread 24572 created at 0x7ffa8b50cd00
+--- Process 26300 thread 48984 created at 0x7ffa8b50cd00
+--- Process 26300 loaded C:\Windows\System32\kernel32.dll at 0x7ffa8c620000
+--- Process 26300 loaded C:\Windows\System32\KernelBase.dll at 0x7ffa8b640000
+--- Process 26300 loaded C:\Windows\System32\ucrtbase.dll at 0x7ffa8b4e0000
+--- Process 26300 loaded C:\msys64\ucrt64\bin\libgcc_s_seh-1.dll at 0x7ffa1daf0000
+--- Process 26300 loaded C:\msys64\ucrt64\bin\libstdc++-6.dll at 0x7ff96f250000
+--- Process 26300 loaded C:\msys64\ucrt64\bin\libgomp-1.dll at 0x7ffa0b510000
+--- Process 26300 loaded C:\msys64\ucrt64\bin\libwinpthread-1.dll at 0x7ffa1f0b0000
+--- Process 26300 loaded C:\Windows\System32\advapi32.dll at 0x7ffa8e0f0000
+--- Process 26300 loaded C:\Windows\System32\msvcrt.dll at 0x7ffa8bf40000
+--- Process 26300 loaded C:\Windows\System32\sechost.dll at 0x7ffa8c270000
+--- Process 26300 loaded C:\Windows\System32\rpcrt4.dll at 0x7ffa8de00000
+--- Process 26300 loaded C:\Windows\System32\cryptbase.dll at 0x7ffa8a920000
+--- Process 26300 loaded C:\Windows\System32\bcryptprimitives.dll at 0x7ffa8bcc0000
+--- Process 26300 loaded C:\Windows\System32\kernel.appcore.dll at 0x7ffa8a050000
+--- Process 26300 thread 50292 created at 0x7ffa8e328fe0
+--- Process 26300 thread 50292 exited with status 0x0
+*** pc 0x7ffa8e367030 out of range for pid 26300
+--- Process 26300 thread 29532 exited with status 0x0
+--- Process 26300 thread 49472 exited with status 0x0
+--- Process 26300 thread 37320 exited with status 0x0
+--- Process 26300 thread 48984 exited with status 0x0
+--- Process 26300 thread 52064 exited with status 0x0
+--- Process 26300 thread 24572 exited with status 0x0
+--- Process 26300 exited with status 0x0
+*** stop profiler thread on pid 26300
+1 sample across 1 bucket written to gmon.out.26300.libgomp-1.dll
+2 samples across 2 buckets written to gmon.out.26300.KernelBase.dll
+5552 samples across 6 buckets written to gmon.out.26300.ntdll.dll
+4916 samples across 48 buckets written to gmon.out.26300.nbody_benchmark.exe
+*** Windows process 26300 detached

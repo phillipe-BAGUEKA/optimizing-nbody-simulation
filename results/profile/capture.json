@@ -1,0 +1,109 @@
+{
+  "head": "9bd871621b9c47608139fa8d685ff3d83624a103",
+  "git_status_before": [
+    " M CMakeLists.txt",
+    " M README.md",
+    " M docs/roadmap.md",
+    "?? benchmarks/analyze.py",
+    "?? benchmarks/benchmark.cpp",
+    "?? benchmarks/profile_openmp.py",
+    "?? benchmarks/run_campaign.py",
+    "?? docs/baseline-performance.md",
+    "?? docs/model-and-validation.md",
+    "?? include/nbody/body.hpp",
+    "?? include/nbody/examples.hpp",
+    "?? include/nbody/gravity.hpp",
+    "?? include/nbody/simulation.hpp",
+    "?? include/nbody/vec3.hpp",
+    "?? report/main.pdf",
+    "?? report/main.tex",
+    "?? results/baseline/final-1536.csv",
+    "?? results/baseline/final-3072.csv",
+    "?? results/baseline/metadata.json",
+    "?? results/baseline/raw.csv",
+    "?? results/baseline/speedup.png",
+    "?? results/baseline/summary.csv",
+    "?? results/baseline/timings.tex",
+    "?? results/pilot/metadata.json",
+    "?? results/pilot/raw.csv",
+    "?? results/profile/batches.txt",
+    "?? results/profile/capture.json",
+    "?? results/profile/events.txt",
+    "?? results/profile/executable.gmon",
+    "?? results/profile/symbols.csv",
+    "?? src/gravity.cpp",
+    "?? src/gravity_kernel.hpp",
+    "?? src/main.cpp",
+    "?? src/simulation.cpp",
+    "?? tests/cli_validation.cmake",
+    "?? tests/simulation_tests.cpp",
+    "?? tests/vec3_tests.cpp"
+  ],
+  "source_root_at_build": "C:/Users/loicp/Documents/I3/02-C++/000-PROJECT/n_body",
+  "source_sha256": {
+    "CMakeLists.txt": "eb9225bb6038a19f3a893b6efcff518bb866746a321ad310c35875ff84207e42",
+    "CMakePresets.json": "3228d8ef93df730cba8d6d271b27c6dd1dc9ad3a5f28ef6dbc257454941b1b1f",
+    "benchmarks/benchmark.cpp": "f41c7d48d7c91afe89c67c39a124afdd49e475bf09ced83ee0d3af658d5784f0",
+    "benchmarks/profile_openmp.py": "1d659b95504a7aceb739b1745c8347520ae8c21dba9035bf71c9337b43c51d92",
+    "src/gravity.cpp": "e26d83a0ef3139c91a45ea7ad6e0cac028999a0f7f663ad7d15ed8e5302827a0",
+    "src/gravity_kernel.hpp": "9a53fec1c619ba72fe012077993b1465bfd7cef04804c617987eefacebbadb52",
+    "src/simulation.cpp": "7ab8a71861d3c176001b4b795ae1e924157ca46dbfde6b1094a132de4bad2528",
+    "include/nbody/body.hpp": "1ebb68192185a823d11b85b0a51194b6d1371d64c96c262d1f0b41a3e532b529",
+    "include/nbody/examples.hpp": "f9b1b64142802757375abaa0c6743fe9a32dfc4042c3517de53ed217de68ac15",
+    "include/nbody/gravity.hpp": "d31f0fe83624771d945d06147cb35a497befe21e0996724f8a932fbef2649c7f",
+    "include/nbody/simulation.hpp": "ff89e1f695d9ad0c5a210a4fd6bb84e646fc5ad2c8f94b1ea2cd9495fa041d4b",
+    "include/nbody/vec3.hpp": "56036793c11190fd62237e335f4dda4fbacc623c2b66ab01a2300e65a0f26c6a"
+  },
+  "workload": [
+    "C:\\Users\\loicp\\Documents\\I3\\02-C++\\000-PROJECT\\n_body\\build\\ucrt64-profile\\nbody_benchmark.exe",
+    "profile",
+    "3072",
+    "12",
+    "20261117",
+    "60",
+    "4"
+  ],
+  "attach_command": [
+    "C:\\msys64\\usr\\bin\\profiler.exe",
+    "-v",
+    "-e",
+    "-s",
+    "100",
+    "-p",
+    "-26300"
+  ],
+  "profiler": "profiler (cygwin) 3.6.10",
+  "build_commands": [
+    "C:\\msys64\\ucrt64\\bin\\g++.exe -IC:/Users/loicp/Documents/I3/02-C++/000-PROJECT/n_body/include -O3 -DNDEBUG -g -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -fopenmp -o CMakeFiles\\nbody.dir\\src\\gravity.cpp.obj -c C:\\Users\\loicp\\Documents\\I3\\02-C++\\000-PROJECT\\n_body\\src\\gravity.cpp",
+    "C:\\msys64\\ucrt64\\bin\\g++.exe -IC:/Users/loicp/Documents/I3/02-C++/000-PROJECT/n_body/include -O3 -DNDEBUG -g -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -fopenmp -o CMakeFiles\\nbody.dir\\src\\simulation.cpp.obj -c C:\\Users\\loicp\\Documents\\I3\\02-C++\\000-PROJECT\\n_body\\src\\simulation.cpp",
+    "C:\\msys64\\ucrt64\\bin\\g++.exe -IC:/Users/loicp/Documents/I3/02-C++/000-PROJECT/n_body/include -O3 -DNDEBUG -g -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -fopenmp -o CMakeFiles\\nbody_benchmark.dir\\benchmarks\\benchmark.cpp.obj -c C:\\Users\\loicp\\Documents\\I3\\02-C++\\000-PROJECT\\n_body\\benchmarks\\benchmark.cpp"
+  ],
+  "binary_sha256": "5db1a55d284e9c036c89cd195abc6456d2fc3299ded01f05dcce76ccac0f01ca",
+  "symbol_input_sha256": {
+    "executable.gmon": "13b3cc0b2b4fc1604235d7909c09ff06c0703ad1e14882fff74012bc45ae512e",
+    "executable.debug": "345b8854021b4112c19686ed329b1b6a462663b781a850f01f1a14d4101a027e"
+  },
+  "samples_by_module": {
+    "libgomp-1.dll": 1,
+    "KernelBase.dll": 2,
+    "ntdll.dll": 5552,
+    "nbody_benchmark.exe": 4916
+  },
+  "thread_cpu_window": {
+    "pid": 26300,
+    "wall_seconds": 3.431859300006181,
+    "cpu_delta_seconds_by_windows_tid": {
+      "24572": 2.6875,
+      "29532": 0.015625,
+      "37320": 0.0,
+      "48984": 2.453125,
+      "49472": 0.0,
+      "50272": 2.640625,
+      "52064": 2.6875
+    }
+  },
+  "completed_batches": 60,
+  "final_hashes": [
+    "c0f767c838042956"
+  ]
+}

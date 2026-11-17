@@ -2,7 +2,7 @@
 
 Implementation, profiling, and optimization of direct 3D N-body simulations in C++20 with OpenMP.
 
-**Status:** milestone 0 toolchain setup. The repository contains planning documents and a standalone C++20/OpenMP build check. The simulator, benchmarks, interface, and report have not been implemented or validated yet.
+The direct sequential and baseline OpenMP solvers share a Velocity Verlet integrator. Debug and Release tests cover physical references and solver equivalence. The first performance campaign measures two provisional system sizes on the local Windows machine. Definitive assignment inputs, convergence, an optimized version and the interface remain future work. [Baseline results and reproduction](docs/baseline-performance.md)
 
 ## Objectives
 
@@ -17,7 +17,7 @@ Implementation, profiling, and optimization of direct 3D N-body simulations in C
 
 - Model a three-dimensional system with mass, position, and velocity for each body.
 - Compute gravitational accelerations using a documented softening parameter.
-- Compute all accelerations from the previous state before updating velocities and positions.
+- Evaluate all accelerations from a complete same-time position state. In Velocity Verlet, compute the initial accelerations, update all positions, recompute all accelerations, then update all velocities.
 - Use a fixed time step and the same integration scheme in all compared implementations.
 - Keep the direct O(N^2) interaction algorithm in the assessed optimization work.
 - Validate parallel positions and velocities against the sequential reference using a predefined numerical tolerance.
@@ -53,13 +53,11 @@ Conversation and coaching are in French. Code identifiers, public technical docu
 
 ## Reproducibility
 
-Initial conditions, physical parameters, numerical settings, thread counts, compiler settings, and machine information will be recorded. Performance comparisons will use identical inputs and simulation settings. Visualization and trajectory export will be outside the timed simulation region.
-
-No benchmark results or performance claims are available yet.
+The first campaign used a fixed seed, copied initial states, 12 steps, six measured rounds and observed teams of 1, 2, 4, 8 and 12. For 3,072 bodies the median fell from 479.7 ms with the sequential solver to 135.3 ms with 12 OpenMP threads. The raw runs, build fingerprints, dispersion, plotting script and separate sampling profile are documented in the [campaign protocol](docs/baseline-performance.md).
 
 ## Milestone 0 build check
 
-The current executable is an OpenMP toolchain check, not the N-body simulator. Run the following commands from an MSYS2 UCRT64 shell:
+The original `openmp_smoke_check` executable is retained alongside the simulator. Run the following commands from an MSYS2 UCRT64 shell:
 
 ```bash
 cd /c/Users/loicp/Documents/I3/02-C++/000-PROJECT/n_body
@@ -88,6 +86,33 @@ gdb ./build/ucrt64-debug/openmp_smoke_check.exe
 ```
 
 The verified local toolchain and machine details are recorded in [docs/development-environment.md](docs/development-environment.md).
+
+## Simulation and validation
+
+`nbody::Vec3` provides addition, subtraction, scalar multiplication, accumulation, and norms. `Body` stores mass, position, and velocity. Bodies and accelerations occupy separate vectors. The two solvers share the contribution calculation and source iteration order; a single Velocity Verlet implementation selects the solver through an enum.
+
+After building, run the supplied two-body arithmetic reference and the four-body example:
+
+```bash
+./build/ucrt64-release/nbody_demo.exe --solver sequential --case two-body --steps 1 --dt 0.5
+./build/ucrt64-release/nbody_demo.exe --solver openmp --case two-body --steps 1 --dt 0.5 --threads 4 --diagnostics
+./build/ucrt64-release/nbody_demo.exe --solver sequential --case multi-body --steps 25 --dt 0.01
+./build/ucrt64-release/nbody_demo.exe --solver openmp --case multi-body --steps 25 --dt 0.01 --threads 4 --diagnostics
+```
+
+`--help` lists options. Defaults are sequential, two-body, 10 steps, `dt=0.01`, and one requested OpenMP thread. The optional `--diagnostics` reports the team size observed inside the last force evaluation. It is disabled by default. `--threads` is accepted only in OpenMP mode; the runtime can limit the actual team size. Output uses 17 significant digits and includes parameters and initial/final states.
+
+`ctest --preset ucrt64-debug` and `ctest --preset ucrt64-release` execute the six original checks and two benchmark integration checks. Tests remain active in Release. To see the observed 1/2/4-thread teams, use `ctest --preset ucrt64-release -R simulation_tests -V`. The test targets are created when `BUILD_TESTING=ON` (the default).
+
+See [model, inputs, contracts and validation](docs/model-and-validation.md) for the complete provisional cases, units, exact reference constants, input validation, and numerical limitations. With `K` steps, the integrator performs `K + 1` complete force evaluations, including initialization, and uses linear storage without an interaction matrix.
+
+For the report, run from the repository root with an existing LaTeX installation:
+
+```bash
+pdflatex -interaction=nonstopmode -halt-on-error -output-directory=report report/main.tex
+```
+
+The [compiled report](report/main.pdf) covers the model, verification, measured strong scaling and the baseline profile. The final report target is 12–18 main-text pages. Recorded-trajectory playback and progressive state reception are planned.
 
 ## Submission
 

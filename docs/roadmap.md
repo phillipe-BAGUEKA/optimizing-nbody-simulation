@@ -16,9 +16,18 @@ Codex handles local cloning, environment inspection, and setup commands directly
 - [x] Repository access verified and initial project framing added.
 - [x] Local clone and Windows/MSYS2 UCRT64 toolchain verified.
 - [x] C++20/OpenMP build smoke check completed on the learner's computer.
-- [ ] Physical model and numerical choices explained and agreed.
-- [ ] Sequential or parallel simulator implemented.
-- [ ] Numerical or performance results produced.
+- [x] Initial `Vec3` math type implemented and checked as a bounded first C++ building block.
+- [x] Direct sequential solver and shared fixed-step Velocity Verlet integrator implemented.
+- [x] Baseline OpenMP target-body decomposition implemented.
+- [x] Small independent physical references and sequential/OpenMP comparisons verified in Debug/Release.
+- [x] Short initial LaTeX report written and compiled; results recorded in `docs/model-and-validation.md`.
+- [ ] Learner explanation of the generated core demonstrated independently.
+- [ ] Definitive initial-condition generator and numerical convergence study completed.
+- [x] First unprofiled Release campaign completed with two sizes, a genuine sequential reference and five OpenMP team sizes. Raw measurements, dispersion, speedup, efficiency and a reproducible figure are available.
+- [x] A separate Windows sampling capture locates the OpenMP force loop in the GCC binary. The protocol and evidence are in [the baseline campaign](baseline-performance.md).
+- [ ] Limiting resource tested, optimization selected, implemented and remeasured.
+
+The learner reports having studied the physical model, softening, integrators and complexity. The provisional generator, correctness checks and first measurements are available for guided analysis. Milestone 2 still needs definitive data and convergence work. For milestone 3, the measurements are complete and the learner's independent explanation of the decomposition and barriers is pending. Milestone 4 has baseline evidence for the next experiment.
 
 ## Milestone 0 - Practical setup
 
@@ -75,7 +84,7 @@ Exit criteria: the learner can reconstruct one time step, justify the read/write
 8. Validate isolated-body motion, pair interactions, appropriate symmetries, and numerical finiteness.
 9. Study numerical convergence on controlled cases; expected physics must be consistent with the softening and integration scheme.
 
-Learner-owned core: vector operations as needed, acceleration accumulation, a simulation step, and selected meaningful tests.
+Current core code is available for guided analysis under the bounded authorization above. Subsequent exercises and extensions remain learner-owned unless explicitly delegated.
 
 Exit criteria: a readable sequential reference with independent correctness checks. The learner explains the code, the state transitions, and the operation/storage counts. Update the LaTeX report with implementation and verification.
 
@@ -139,6 +148,7 @@ Exit criteria: a reproducible notebook and documented experiment command, raw re
 The C++ engine remains the source of simulated trajectories.
 
 1. Start with playback of exported trajectories.
+   Progressive reception of simulation states is the second planned mode; neither mode is part of the current core delivery.
 2. Use React and TypeScript for controls/dashboard and Three.js for 3D rendering.
 3. Add camera control, play/pause, a timeline, trails, and body selection.
 4. Display a selected body's position, velocity, and acceleration over time.
