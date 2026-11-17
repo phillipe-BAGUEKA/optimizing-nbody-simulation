@@ -15,6 +15,15 @@ enum class AccelerationSolver
     OpenMP
 };
 
+// Indexed by evaluation (0 is the initial force) and then by OpenMP thread ID.
+using ArrivalTrace = std::vector<std::vector<ThreadArrival>>;
+
+// Evolve the same state, recording one pre-barrier finish per team member.
+ArrivalTrace trace_openmp_arrivals(
+    std::vector<Body>& bodies, const GravityParameters& parameters,
+    double time_step, std::size_t steps
+);
+
 // In-place Velocity Verlet: steps + 1 acceleration evaluations, including steps == 0.
 // Invalid inputs throw before state changes. A numerical failure during evolution
 // throws without rolling back the partially updated state; discard that result.

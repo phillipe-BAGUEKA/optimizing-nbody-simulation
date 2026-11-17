@@ -2,7 +2,7 @@
 
 Implementation, profiling, and optimization of direct 3D N-body simulations in C++20 with OpenMP.
 
-The direct sequential and baseline OpenMP solvers share a Velocity Verlet integrator. Debug and Release tests cover physical references and solver equivalence. The first performance campaign measures two provisional system sizes on the local Windows machine. Definitive assignment inputs, convergence, an optimized version and the interface remain future work. [Baseline results and reproduction](docs/baseline-performance.md)
+The direct sequential and baseline OpenMP solvers share a Velocity Verlet integrator. Debug and Release tests cover physical references and solver equivalence. Local experiments measure strong scaling and the spread in thread finish times on Windows. Definitive assignment inputs, convergence, an optimized version and the interface remain future work. [Protocol and reproduction](docs/baseline-performance.md)
 
 ## Objectives
 
@@ -51,9 +51,23 @@ Core exercises are reserved for the learner. Codex may implement agreed supporti
 
 Conversation and coaching are in French. Code identifiers, public technical documentation, and the report are in English.
 
+## Performance results
+
+### OpenMP speedup by thread count
+
+![OpenMP speedup at 1, 2, 4, 8 and 12 threads for 1,536 and 3,072 bodies, relative to the sequential solver of each size](results/baseline/speedup.png)
+
+Using median times from six repetitions and the sequential solver of the same size as the reference, 12 threads reached 2.94× speedup for 1,536 bodies and 3.54× for 3,072. [Raw timing CSV](results/baseline/raw.csv) · [Figure reproduction script](benchmarks/analyze.py)
+
+### When OpenMP threads finish their work
+
+![Pre-barrier finish time of each OpenMP thread on a common millisecond scale for four and twelve workers, repetition 3 and force evaluation 6 of the 3,072-body case](results/arrivals/thread-finishes.png)
+
+Each point marks one thread finishing its assigned targets before the barrier. In repetition 3, evaluation 6, equal target counts within each team still produced first-to-last spreads of 13.90 ms at four threads and 8.83 ms at twelve. [Raw arrival CSV](results/arrivals/raw.csv) · [Figure reproduction script](benchmarks/analyze.py) · [All evaluation spreads](results/arrivals/spreads.csv)
+
 ## Reproducibility
 
-The first campaign used a fixed seed, copied initial states, 12 steps, six measured rounds and observed teams of 1, 2, 4, 8 and 12. For 3,072 bodies the median fell from 479.7 ms with the sequential solver to 135.3 ms with 12 OpenMP threads. The raw runs, build fingerprints, dispersion, plotting script and separate sampling profile are documented in the [campaign protocol](docs/baseline-performance.md).
+The two experiments cover 12 Verlet steps from copied initial states and record their build fingerprints. The optional arrival diagnostic uses a separate instrumented run. Commands for collecting the data and generating both PNG and vector PDF figures are in the [campaign protocol](docs/baseline-performance.md).
 
 ## Milestone 0 build check
 
@@ -102,7 +116,7 @@ After building, run the supplied two-body arithmetic reference and the four-body
 
 `--help` lists options. Defaults are sequential, two-body, 10 steps, `dt=0.01`, and one requested OpenMP thread. The optional `--diagnostics` reports the team size observed inside the last force evaluation. It is disabled by default. `--threads` is accepted only in OpenMP mode; the runtime can limit the actual team size. Output uses 17 significant digits and includes parameters and initial/final states.
 
-`ctest --preset ucrt64-debug` and `ctest --preset ucrt64-release` execute the six original checks and two benchmark integration checks. Tests remain active in Release. To see the observed 1/2/4-thread teams, use `ctest --preset ucrt64-release -R simulation_tests -V`. The test targets are created when `BUILD_TESTING=ON` (the default).
+`ctest --preset ucrt64-debug` and `ctest --preset ucrt64-release` execute nine checks, including benchmark equivalence, zero steps and the arrival trace. Tests remain active in Release. To see the observed 1/2/4-thread teams, use `ctest --preset ucrt64-release -R simulation_tests -V`. The test targets are created when `BUILD_TESTING=ON` (the default).
 
 See [model, inputs, contracts and validation](docs/model-and-validation.md) for the complete provisional cases, units, exact reference constants, input validation, and numerical limitations. With `K` steps, the integrator performs `K + 1` complete force evaluations, including initialization, and uses linear storage without an interaction matrix.
 
@@ -112,7 +126,7 @@ For the report, run from the repository root with an existing LaTeX installation
 pdflatex -interaction=nonstopmode -halt-on-error -output-directory=report report/main.tex
 ```
 
-The [compiled report](report/main.pdf) covers the model, verification, measured strong scaling and the baseline profile. The final report target is 12–18 main-text pages. Recorded-trajectory playback and progressive state reception are planned.
+The [compiled report](report/main.pdf) covers the model, verification, strong scaling, baseline profile and pre-barrier arrival spread. The final report target is 12–18 main-text pages. Recorded-trajectory playback and progressive state reception are planned.
 
 ## Submission
 

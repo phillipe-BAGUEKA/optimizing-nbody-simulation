@@ -1,6 +1,7 @@
 #include "nbody/gravity.hpp"
 #include "gravity_kernel.hpp"
 
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -153,6 +154,46 @@ void detail::fill_accelerations_openmp(
         }
         accelerations[target_index] = acceleration_for_target(target_index, bodies, parameters);
     }
+}
+
+std::vector<ThreadArrival> detail::trace_accelerations_openmp(
+    const std::vector<Body>& bodies, const GravityParameters& parameters,
+    std::vector<Vec3>& accelerations
+)
+{
+    const std::size_t body_count = bodies.size();
+    if (body_count == 0)
+    {
+        return {};
+    }
+    std::vector<ThreadArrival> arrivals(static_cast<std::size_t>(omp_get_max_threads()));
+    int actual_threads = 0;
+    using Clock = std::chrono::steady_clock;
+    const auto origin = Clock::now();
+
+#pragma omp parallel default(none) shared(bodies, parameters, accelerations, arrivals, actual_threads) \
+    firstprivate(body_count, origin)
+    {
+        const int thread_id = omp_get_thread_num();
+        std::size_t targets = 0;
+#pragma omp for schedule(static) nowait
+        for (std::size_t index = 0; index < body_count; ++index)
+        {
+            accelerations[index] = acceleration_for_target(index, bodies, parameters);
+            ++targets;
+        }
+        // Each worker timestamps its own loop exit before the parallel region joins.
+        const auto finished = Clock::now();
+        arrivals[static_cast<std::size_t>(thread_id)] = {
+            targets, std::chrono::duration_cast<std::chrono::nanoseconds>(finished - origin)
+        };
+        if (thread_id == 0)
+        {
+            actual_threads = omp_get_num_threads();
+        }
+    }
+    arrivals.resize(static_cast<std::size_t>(actual_threads));
+    return arrivals;
 }
 
 void compute_accelerations_sequential(

@@ -17,7 +17,8 @@ void run_velocity_verlet(
     std::size_t steps,
     AccelerationSolver solver,
     int* observed_thread_count,
-    double* elapsed_seconds
+    double* elapsed_seconds,
+    ArrivalTrace* arrivals
 )
 {
     validate_gravity_inputs(bodies, parameters);
@@ -48,6 +49,10 @@ void run_velocity_verlet(
             {
                 *observed_thread_count = bodies.empty() ? 0 : 1;
             }
+        }
+        else if (arrivals != nullptr)
+        {
+            arrivals->push_back(detail::trace_accelerations_openmp(bodies, parameters, output));
         }
         else
         {
@@ -105,7 +110,8 @@ void simulate_velocity_verlet(
     double time_step, std::size_t steps, AccelerationSolver solver, int* observed_thread_count
 )
 {
-    run_velocity_verlet(bodies, parameters, time_step, steps, solver, observed_thread_count, nullptr);
+    run_velocity_verlet(bodies, parameters, time_step, steps, solver,
+                        observed_thread_count, nullptr, nullptr);
 }
 
 double measure_velocity_verlet(
@@ -114,8 +120,19 @@ double measure_velocity_verlet(
 )
 {
     double elapsed_seconds = 0.0;
-    run_velocity_verlet(bodies, parameters, time_step, steps, solver, nullptr, &elapsed_seconds);
+    run_velocity_verlet(bodies, parameters, time_step, steps, solver, nullptr, &elapsed_seconds, nullptr);
     return elapsed_seconds;
+}
+
+ArrivalTrace trace_openmp_arrivals(
+    std::vector<Body>& bodies, const GravityParameters& parameters,
+    double time_step, std::size_t steps
+)
+{
+    ArrivalTrace arrivals;
+    run_velocity_verlet(bodies, parameters, time_step, steps, AccelerationSolver::OpenMP,
+                        nullptr, nullptr, &arrivals);
+    return arrivals;
 }
 
 } // namespace nbody

@@ -296,6 +296,38 @@ void check_parallel_equivalence()
     }
 }
 
+void check_arrival_trace()
+{
+    omp_set_num_threads(4);
+    std::vector<nbody::Body> empty;
+    const nbody::GravityParameters parameters{1.0, 4.0};
+    const auto empty_trace = nbody::trace_openmp_arrivals(empty, parameters, 0.5, 0);
+    expect(empty_trace.size() == 1 && empty_trace.front().empty(), "empty system launches no workers");
+
+    auto bodies = nbody::make_two_body_example();
+    auto reference = bodies;
+    nbody::simulate_velocity_verlet(reference, parameters, 0.5, 1, nbody::AccelerationSolver::Sequential);
+    const auto trace = nbody::trace_openmp_arrivals(bodies, parameters, 0.5, 1);
+    expect(trace.size() == 2, "trace contains initial and updated force");
+    for (const auto& evaluation : trace)
+    {
+        expect(evaluation.size() == 4, "trace includes all team members");
+        std::vector<std::size_t> counts;
+        for (const auto& arrival : evaluation)
+        {
+            counts.push_back(arrival.targets);
+            expect(arrival.finish_offset.count() >= 0, "finish follows the evaluation origin");
+        }
+        std::sort(counts.begin(), counts.end());
+        expect(counts == std::vector<std::size_t>{0, 0, 1, 1}, "idle workers also record a finish");
+    }
+    for (std::size_t i = 0; i < bodies.size(); ++i)
+    {
+        expect_vector(bodies[i].position, reference[i].position, "traced position");
+        expect_vector(bodies[i].velocity, reference[i].velocity, "traced velocity");
+    }
+}
+
 } // namespace
 
 int main()
@@ -311,6 +343,7 @@ int main()
             check_validation(solver);
         }
         check_parallel_equivalence();
+        check_arrival_trace();
     }
     catch (const std::exception& error)
     {

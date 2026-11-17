@@ -3,6 +3,8 @@
 
 #include "nbody/body.hpp"
 
+#include <chrono>
+#include <cstddef>
 #include <vector>
 
 namespace nbody
@@ -12,6 +14,13 @@ struct GravityParameters
 {
     double gravitational_constant{1.0};
     double softening{0.1};
+};
+
+// One worker's completed targets and time from the common start of a force evaluation.
+struct ThreadArrival
+{
+    std::size_t targets{};
+    std::chrono::nanoseconds finish_offset{};
 };
 
 // Reject invalid inputs before computation, including for empty systems.

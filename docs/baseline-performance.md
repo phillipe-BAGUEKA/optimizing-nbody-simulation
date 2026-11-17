@@ -63,9 +63,26 @@ The capture recorded 10,471 mapped hits, including 4,916 in the executable and 5
 
 During a 3.432 s wall-time window of this same PID, two Windows snapshots show four threads accumulating 2.688, 2.453, 2.641 and 2.688 CPU seconds. All seven threads present in both snapshots accumulated 10.484 CPU seconds in total. Concurrent work adds CPU seconds on multiple threads while the wall clock advances once. These are separate OS counters. The profiler histogram merges thread identities and cannot assign a bin to an individual thread. All 60 final hashes match the archived large case. [Capture configuration and CPU window](../results/profile/capture.json) · [Batch outputs](../results/profile/batches.txt)
 
-The capture locates the force loop. Distinguishing arithmetic latency from cache-related stalls requires measurements such as divider-active cycles alongside data-cache miss/stall counters on the same workload and core type. A separate test for losses at larger teams could measure each worker's final target completion and arrival at the barrier on the same inputs.
+The profile workload resets the same initial state for each of its 60 simulations. Each simulation performs 13 force evaluations, giving 780 evaluations over the whole command. The CPU accounting window is a separate observation inside that process. The script takes its first snapshot after a short delay and requests a three-second pause before its second snapshot. The measured 3.432 s include snapshot and scheduling time. The batch log contains batch numbers and hashes without start or end timestamps. The traces cannot identify which simulations or evaluations overlap that window.
+
+## Thread arrival experiment
+
+The optional `arrivals` mode repeats the large case above, using the same constants, generator and seed. Each team completes one instrumented warm-up, followed by six measured repetitions on fresh copies. The order alternates between 4 then 12 threads and 12 then 4. Each run uses the shared Verlet integrator and the same per-target source loop. The ordinary speedup data come from the earlier uninstrumented campaign.
+
+For each evaluation, the calling thread reads `steady_clock` just before entering the parallel region. This is the common time origin and includes team dispatch. In `omp for schedule(static) nowait` each worker counts its own completed targets. It reads the clock once immediately after leaving that loop and writes one private-indexed slot. The implicit barrier at the end of the enclosing parallel region completes the accelerations before Verlet continues. CSV output happens after the simulation and numerical comparison. Thread IDs are OpenMP team indices within each region. The timestamps include any scheduling delays before a worker finishes. [Instrumented loop](../src/gravity.cpp) · [Benchmark mode](../benchmarks/benchmark.cpp)
+
+For each evaluation, **arrival spread** (French *écart d’arrivée*) is the latest minus the earliest finish. Evaluation 0 is the initial force and evaluations 1–12 use updated positions. All 156 evaluations had complete teams and 3,072 targets. Each worker processed 768 or 256 targets at 4 or 12 threads respectively. The 12 measured final states passed the existing finite component-wise comparison to the sequential solver and shared its archived final fingerprint, `c0f767c838042956`.
+
+| Actual threads | Evaluations | Min (ms) | Q1 (ms) | Median (ms) | Q3 (ms) | Max (ms) |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 4 | 78 | 1.43 | 8.47 | 12.09 | 14.42 | 26.98 |
+| 12 | 78 | 5.03 | 6.72 | 7.85 | 8.82 | 14.28 |
+
+Quartiles use inclusive linear interpolation over the 78 evaluation spreads for each team. The figure uses repetition 3 and evaluation 6, selected before measurement. The shaded interval spans 23.618–37.516 ms at four threads and 12.249–21.077 ms at twelve. Both panels use the same time scale. Equal target counts left a measurable spread in both teams. The offsets alone cannot distinguish worker start skew, preemption, core placement or differences in execution rate. They do not measure time inside the barrier or the speedup available from an optimization. [Raw thread offsets](../results/arrivals/raw.csv) · [Per-evaluation spreads](../results/arrivals/spreads.csv) · [Summary](../results/arrivals/summary.csv) · [Build and machine](../results/arrivals/metadata.json)
 
 ## Reproduce on this Windows installation
+
+The combined analysis records the Python and Matplotlib versions, the selected repetition and evaluation, and SHA-256 digests of both input CSVs and the plotting script. For divisible workloads it also verifies equal per-worker target counts before producing the equal-work comparison. [Figure provenance](../results/arrivals/figures.json)
 
 Run the following in PowerShell from the repository root. The campaign launcher uses Python 3.11 or later. The local Anaconda interpreter has Matplotlib 3.9.2 and psutil 5.9.0. The raw runners require a new or empty destination, so these commands use the ignored build directory for repeat runs. To redraw the published figure and table, give the analysis script the archived raw CSV.
 
@@ -83,6 +100,9 @@ ctest --preset ucrt64-release
 & $analysisPython benchmarks/run_campaign.py --sizes 1536 3072 --threads 1 2 4 8 12 --steps 12 --seed 20261117 --repetitions 6 --output build/repeat-baseline
 & $analysisPython benchmarks/analyze.py build/repeat-baseline/raw.csv
 & $analysisPython benchmarks/analyze.py results/baseline/raw.csv
+& $analysisPython benchmarks/run_campaign.py --arrivals --sizes 3072 --threads 4 12 --steps 12 --seed 20261117 --repetitions 6 --output build/repeat-arrivals
+& $analysisPython benchmarks/analyze.py results/baseline/raw.csv --arrivals build/repeat-arrivals/raw.csv --output build/repeat-figures
+& $analysisPython benchmarks/analyze.py results/baseline/raw.csv --arrivals results/arrivals/raw.csv
 cmake --preset ucrt64-release -B build/ucrt64-profile '-DCMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG -g' -DBUILD_TESTING=OFF
 cmake --build build/ucrt64-profile --target nbody_benchmark
 & $analysisPython benchmarks/profile_openmp.py --output build/repeat-profile

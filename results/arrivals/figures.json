@@ -1,0 +1,11 @@
+{
+  "python": "3.12.7",
+  "matplotlib": "3.9.2",
+  "example_repetition": 3,
+  "example_evaluation": 6,
+  "sha256": {
+    "benchmarks/analyze.py": "69c3db6a37b5919b78d1cef05546c09add2849a3db1470d4341bf9e95b9acf70",
+    "unprofiled_timing_csv": "acb3597b26521c73be7584ca66b805c44994e8e116209c1cbd135899d7c5fd37",
+    "thread_arrival_csv": "cef9d5532f3a18c51348256f848420f90a79670f494754828b1b0870a4799f35"
+  }
+}

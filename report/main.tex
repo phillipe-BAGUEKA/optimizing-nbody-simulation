@@ -6,13 +6,13 @@
 \usepackage{amsmath,amssymb,booktabs}
 \usepackage{graphicx}
 \usepackage[hidelinks]{hyperref}
-\hypersetup{pdftitle={Optimizing N-Body Simulation: OpenMP baseline},
+\hypersetup{pdftitle={Optimizing N-Body Simulation: Strong scaling and OpenMP thread arrivals},
             pdfauthor={Semester project in parallel programming}}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{6pt}
-\title{Optimizing N-Body Simulation\\\large Correctness, strong scaling and the first OpenMP profile}
+\title{Optimizing N-Body Simulation\\\large Correctness, strong scaling and OpenMP thread arrivals}
 \author{Semester project in parallel programming}
-\date{17 November 2026}
+\date{18 November 2026}
 
 \begin{document}
 \maketitle
@@ -23,6 +23,7 @@ C++20 and OpenMP. This report records a sequential solver, a baseline parallel
 solver, their shared Velocity Verlet integrator, and independent correctness
 checks. A first experiment measures strong scaling on two fixed problem sizes.
 A Windows sampling profile locates the code executed by the OpenMP workers.
+A separate experiment measures when each worker finishes its assigned targets.
 The implementation uses double precision and provisional educational data.
 
 The final report will target 12--18 pages of main text. Definitive input data,
@@ -143,14 +144,11 @@ Body & Mass & Position & Velocity \\
 \end{center}
 
 \section{Validation actually performed}
-Local builds used GCC 16.2.0 from MSYS2 UCRT64 with C++20 and OpenMP on
-Windows 11, Intel Core 7 150U (10 physical cores, 12 logical processors).
-Both existing CMake presets configured and compiled without compiler warnings.
-CTest passed the six original tests in Debug and Release. The benchmark added
-two integration checks covering solver equivalence and zero steps. All eight
-entries then passed in each configuration.
-Checks use explicit diagnostics and exit codes, so they remain active with
-\texttt{NDEBUG}.
+Both C++20/OpenMP presets built without warnings using MSYS2 UCRT64 GCC
+16.2.0 on Windows 11 (Intel Core 7 150U, 10 cores, 12 logical processors).
+Debug and Release each passed the eight baseline tests and the ninth arrival
+test. Checks remain active with \texttt{NDEBUG}. The two-body diagnostic
+also verified that two idle workers recorded a finish.
 
 The independent reference literals for the two-body step are:
 \begin{center}
@@ -234,9 +232,10 @@ summarizes six simulations. The sequential rows define the reference.
 
 \begin{figure}[ht]
 \centering
-\includegraphics[width=0.90\linewidth]{results/baseline/speedup.png}
-\caption{Strong scaling from 72 unprofiled runs. Each point uses the
-sequential median at the same $N$. The dashed line marks unit speedup.}
+\includegraphics[width=0.90\linewidth]{results/baseline/speedup.pdf}
+\caption{OpenMP speedup by thread count. Each point divides the sequential
+solver's median time at the same $N$ by the OpenMP median. Both medians use
+six unprofiled repetitions. The dashed line marks unit speedup.}
 \end{figure}
 
 The serial and one-thread OpenMP medians differ by 5.2 and 4.4\,ms.
@@ -250,7 +249,8 @@ pair contributions, from 30,650,880 to 122,643,456 per run.
 \section{Sampling the four-thread force loop}
 We built a separate UCRT64 Release executable with the same compiler flags
 and \texttt{-g}. It repeated the 3,072-body, 12-step, four-thread case
-60 times from its original state. Every batch yielded the same final
+60 times from its original state in one process. The command ran 780
+force evaluations in total. Every batch yielded the same final
 fingerprint as the unprofiled campaign. The MSYS2 Cygwin
 \href{https://cygwin.com/cygwin-ug-net/profiler.html}{sampling profiler}
 (3.6.10) attached to the initialized Windows process at a requested
@@ -262,8 +262,11 @@ the loaded GNU OpenMP runtime. We also read OS user and kernel CPU counters
 twice for the same process during sampling. In 3.432\,s of wall time, four
 thread IDs accumulated 2.688, 2.453, 2.641 and 2.688 CPU seconds.
 All seven threads present at both snapshots accumulated 10.484 CPU seconds
-in total. Wall time advances once for the observer. CPU time adds the time
-each thread actually executes, including overlapping execution.
+in total. This 3.432\,s interval covers two CPU snapshots and the requested
+three-second pause between them. The batch log contains sequence numbers
+and final hashes without timestamps. It cannot tell which of the 60
+simulations or force evaluations overlapped the window. Wall time advances
+once while CPU time can accumulate concurrently across threads.
 
 \textbf{Function attribution.} The profiler periodically reads thread
 instruction pointers, including those of threads in waits, and groups hits
@@ -296,15 +299,108 @@ not measure elapsed seconds, useful CPU cycles or barrier waiting time.
 Function attribution alone cannot tell whether arithmetic latency, memory
 stalls or arrival imbalance explains the scaling curve.
 
-\textbf{Evidence for the next experiment.} Divider-active cycles and
-data-cache stall counters on a fixed core type could test an arithmetic
-limit in the force loop. Per-worker arrival times at each force barrier
-could test imbalance between workers. Selection of an optimization follows
-those measurements and the learner's interpretation.
+\textbf{Following up the profile.} The next experiment isolates the time
+between the first and last worker to finish a force calculation. Arithmetic
+latency and memory stalls would require separate hardware-counter measurements.
 
 The raw CSV, complete final states, figure generator, profile exports and
 exact reproduction commands are indexed in \path{docs/baseline-performance.md}.
 Definitive assignment data, convergence and long-term invariant tests,
 an optimized comparison and trajectory visualization remain future stages.
+
+\clearpage
+\section{Measuring thread arrivals}
+With 3,072 bodies, each target reads the same number of sources. Static
+scheduling on this machine gave each of four workers 768 targets, or each
+of twelve workers 256. We asked how far apart workers finished these equal
+assignments in a single force evaluation.
+
+\textbf{Measurement site.} For each evaluation, the calling thread allocates
+the result slots, then reads a common \texttt{steady\_clock} origin immediately
+before entering a parallel region. Each worker counts the targets it completes.
+The diagnostic uses the same per-target C++ function as the baseline. The
+sequence inside the parallel region is:
+\begin{verbatim}
+  omp for schedule(static) nowait
+      compute and store acceleration for each assigned target
+      count this target locally
+  read steady_clock once
+  store the count and finish offset in this thread's slot
+  join the parallel region
+\end{verbatim}
+The \texttt{nowait} clause puts the finish timestamp before the end-of-region
+barrier. The join still completes every acceleration before the next Verlet
+phase reads it. A finish offset includes dispatch and any descheduling after
+the origin. Subtracting the earliest from the latest offset gives one
+\emph{arrival spread} per evaluation. Actual barrier entry and exit times
+would be needed to measure time spent inside the barrier.
+
+\textbf{Workload and checks.} We reused the Release preset, seed 20261117,
+$G=1$, $\epsilon=0.05$, $\Delta t=0.0005$ and 12 steps. After one instrumented
+warm-up per team, six repetitions alternated between 4 then 12 threads and
+12 then 4. Each run restarted from the same state. Index 0 labels the initial
+force and indices 1--12 follow the position updates. The 1,248 worker records
+cover 156 evaluations. The target counts sum to 3,072 each time. Every
+instrumented final position and velocity passed the existing tolerance check
+against the sequential solver. CSV writes took place after the simulation.
+
+\textbf{Reproduction.} From the repository root in an MSYS2 UCRT64 shell,
+use a Windows Python with Matplotlib. Run the campaign command to collect
+fresh data into an empty directory. The analysis command regenerates both
+PNG and vector PDF figures from the archived CSVs.
+\begin{verbatim}
+py=/c/Users/loicp/anaconda3/python.exe
+"$py" benchmarks/run_campaign.py --arrivals --sizes 3072 \
+  --threads 4 12 --steps 12 --seed 20261117 --repetitions 6 \
+  --output build/repeat-arrivals
+"$py" benchmarks/analyze.py results/baseline/raw.csv \
+  --arrivals results/arrivals/raw.csv
+\end{verbatim}
+Use \path{build/repeat-arrivals/raw.csv} as the second input to analyze a
+fresh run. Compiler commands and measured source fingerprints are archived
+in \path{results/arrivals/metadata.json}.
+
+\clearpage
+\section{Observed arrival spread}
+Table~\ref{tab:arrivals} describes all 13 evaluations of all six repetitions
+for each team. Each evaluation contributes one observation, regardless of
+the team size. Quartiles use inclusive linear interpolation. Figure~\ref{fig:arrivals}
+uses the same repetition and evaluation for both teams, chosen before the run.
+
+\begin{table}[ht]
+\centering
+\small
+\begin{tabular}{rrrrrrr}
+\toprule
+Threads & Evaluations & Minimum & $Q_1$ & Median & $Q_3$ & Maximum \\
+\midrule
+4  & 78 & 1.43 & 8.47 & 12.09 & 14.42 & 26.98 \\
+12 & 78 & 5.03 & 6.72 &  7.85 &  8.82 & 14.28 \\
+\bottomrule
+\end{tabular}
+\caption{Arrival spread in milliseconds, measured across one force evaluation.}
+\label{tab:arrivals}
+\end{table}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\linewidth]{results/arrivals/thread-finishes.pdf}
+\caption{When OpenMP threads finish their work. Each point marks the end of
+one worker's assigned targets before the barrier, in repetition 3, evaluation
+6. Both panels use milliseconds from the common origin of their respective
+evaluation. Shading spans the earliest and latest finish.}
+\label{fig:arrivals}
+\end{figure}
+
+In the selected evaluation, four threads finished between 23.62 and
+37.52\,ms. Twelve threads finished between 12.25 and 21.08\,ms. Across all
+evaluations the median spread was smaller with twelve workers, although
+their individual assignments were equal in size within both teams.
+
+The offsets establish that completion times differed even with balanced
+target counts. They combine team dispatch, scheduling delays and execution
+rate. OpenMP thread IDs identify members of an evaluation's team. The trace
+does not establish which physical core ran a worker, why it finished at
+that time, or how much a change would improve the full simulation.
 
 \end{document}

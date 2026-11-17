@@ -25,6 +25,7 @@ Codex handles local cloning, environment inspection, and setup commands directly
 - [ ] Definitive initial-condition generator and numerical convergence study completed.
 - [x] First unprofiled Release campaign completed with two sizes, a genuine sequential reference and five OpenMP team sizes. Raw measurements, dispersion, speedup, efficiency and a reproducible figure are available.
 - [x] A separate Windows sampling capture locates the OpenMP force loop in the GCC binary. The protocol and evidence are in [the baseline campaign](baseline-performance.md).
+- [x] Pre-barrier finishes measured at 4 and 12 threads on the same 3,072-body case. Six repetitions per team yielded 78 evaluation spreads each. [Raw trace and analysis](baseline-performance.md#thread-arrival-experiment)
 - [ ] Limiting resource tested, optimization selected, implemented and remeasured.
 
 The learner reports having studied the physical model, softening, integrators and complexity. The provisional generator, correctness checks and first measurements are available for guided analysis. Milestone 2 still needs definitive data and convergence work. For milestone 3, the measurements are complete and the learner's independent explanation of the decomposition and barriers is pending. Milestone 4 has baseline evidence for the next experiment.

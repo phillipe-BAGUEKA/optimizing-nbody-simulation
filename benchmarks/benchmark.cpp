@@ -44,6 +44,21 @@ int read_threads(std::string_view argument)
     return count;
 }
 
+std::vector<int> read_teams(int first, int argc, char* argv[])
+{
+    std::vector<int> teams;
+    for (int index = first; index < argc; ++index)
+    {
+        const int threads = read_threads(argv[index]);
+        if (std::find(teams.begin(), teams.end(), threads) != teams.end())
+        {
+            throw std::invalid_argument("Duplicate OpenMP configuration.");
+        }
+        teams.push_back(threads);
+    }
+    return teams;
+}
+
 std::vector<nbody::Body> make_initial_state(std::size_t count, std::uint64_t seed)
 {
     std::mt19937_64 generator(seed);
@@ -189,6 +204,68 @@ void profile(const std::vector<nbody::Body>& initial, std::size_t steps, int rep
     }
 }
 
+void arrival_campaign(const std::vector<nbody::Body>& initial, std::size_t steps,
+                      std::uint64_t seed, int repeats, const std::vector<int>& teams)
+{
+    auto reference = initial;
+    nbody::simulate_velocity_verlet(reference, gravity, dt, steps, nbody::AccelerationSolver::Sequential);
+    const auto initial_hash = state_fingerprint(initial);
+    std::cout << "n,k,seed,g,epsilon,dt,round,order,requested_threads,observed_threads,"
+                 "evaluation,thread_id,targets,finish_ns,initial_hash,final_hash\n";
+
+    // Round zero warms up each instrumented team. Subsequent rounds rotate the order.
+    const auto run = [&](int threads, int round, std::size_t order)
+    {
+        omp_set_num_threads(threads);
+        auto state = initial;
+        const auto trace = nbody::trace_openmp_arrivals(state, gravity, dt, steps);
+        compare_final_state(state, reference);
+        if (trace.empty() || trace.size() - 1 != steps)
+        {
+            throw std::runtime_error("Expected an initial force evaluation and one per step.");
+        }
+        const auto final_hash = state_fingerprint(state);
+        for (std::size_t evaluation = 0; evaluation < trace.size(); ++evaluation)
+        {
+            const auto& arrivals = trace[evaluation];
+            std::size_t total_targets = 0;
+            for (const auto& arrival : arrivals)
+            {
+                total_targets += arrival.targets;
+            }
+            if (arrivals.size() != static_cast<std::size_t>(threads) || total_targets != initial.size())
+            {
+                throw std::runtime_error("Unexpected team size or target count in arrival trace.");
+            }
+            if (round == 0)
+            {
+                continue;
+            }
+            for (std::size_t id = 0; id < arrivals.size(); ++id)
+            {
+                std::cout << initial.size() << ',' << steps << ',' << seed << ','
+                          << gravity.gravitational_constant << ',' << gravity.softening << ','
+                          << dt << ',' << round << ',' << order << ',' << threads << ','
+                          << arrivals.size() << ',' << evaluation << ',' << id << ','
+                          << arrivals[id].targets << ',' << arrivals[id].finish_offset.count() << ','
+                          << std::hex << initial_hash << ',' << final_hash << std::dec << '\n';
+            }
+        }
+    };
+    for (int threads : teams)
+    {
+        run(threads, 0, 0);
+    }
+    for (int round = 0; round < repeats; ++round)
+    {
+        for (std::size_t order = 0; order < teams.size(); ++order)
+        {
+            const int threads = teams[(static_cast<std::size_t>(round) + order) % teams.size()];
+            run(threads, round + 1, order + 1);
+        }
+    }
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -199,7 +276,8 @@ int main(int argc, char* argv[])
         {
             throw std::invalid_argument(
                 "Usage: nbody_benchmark campaign N K SEED R FINAL.csv|- [THREADS ...]\n"
-                "       nbody_benchmark profile N K SEED R THREADS"
+                "       nbody_benchmark profile N K SEED R THREADS\n"
+                "       nbody_benchmark arrivals N K SEED R THREADS [THREADS ...]"
             );
         }
         const std::string_view mode = argv[1];
@@ -216,17 +294,8 @@ int main(int argc, char* argv[])
         if (mode == "campaign")
         {
             std::vector<Configuration> configurations{{nbody::AccelerationSolver::Sequential, 1}};
-            for (int index = 7; index < argc; ++index)
+            for (int threads : read_teams(7, argc, argv))
             {
-                const int threads = read_threads(argv[index]);
-                const auto duplicate = [threads](const Configuration& config)
-                {
-                    return config.solver == nbody::AccelerationSolver::OpenMP && config.requested == threads;
-                };
-                if (std::any_of(configurations.begin(), configurations.end(), duplicate))
-                {
-                    throw std::invalid_argument("Duplicate OpenMP configuration.");
-                }
                 configurations.push_back({nbody::AccelerationSolver::OpenMP, threads});
             }
             campaign(make_initial_state(count, seed), steps, seed, repeats, argv[6], configurations);
@@ -235,9 +304,13 @@ int main(int argc, char* argv[])
         {
             profile(make_initial_state(count, seed), steps, repeats, read_threads(argv[6]));
         }
+        else if (mode == "arrivals")
+        {
+            arrival_campaign(make_initial_state(count, seed), steps, seed, repeats, read_teams(6, argc, argv));
+        }
         else
         {
-            throw std::invalid_argument("Unknown mode or incorrect number of profile arguments.");
+            throw std::invalid_argument("Unknown mode or incorrect number of arguments.");
         }
         return 0;
     }

@@ -15,6 +15,10 @@ void fill_accelerations_openmp(
     const std::vector<Body>& bodies, const GravityParameters& parameters,
     std::vector<Vec3>& accelerations, int* observed_thread_count
 );
+std::vector<ThreadArrival> trace_accelerations_openmp(
+    const std::vector<Body>& bodies, const GravityParameters& parameters,
+    std::vector<Vec3>& accelerations
+);
 void validate_accelerations(const std::vector<Vec3>& accelerations);
 } // namespace nbody::detail
 

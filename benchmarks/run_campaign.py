@@ -44,7 +44,9 @@ def main() -> None:
     parser.add_argument("--repetitions", type=int, default=6)
     parser.add_argument("--build-dir", type=Path, default=ROOT / "build/ucrt64-release")
     parser.add_argument("--output", type=Path, required=True, help="New output directory")
-    parser.add_argument("--no-states", action="store_true", help="Omit full final states for a pilot")
+    options = parser.add_mutually_exclusive_group()
+    options.add_argument("--no-states", action="store_true", help="Omit final states for a pilot")
+    options.add_argument("--arrivals", action="store_true", help="Record pre-barrier thread finishes")
     args = parser.parse_args()
     if len(set(args.sizes)) != len(args.sizes) or any(n < 1 for n in args.sizes):
         parser.error("Body counts must be distinct and positive.")
@@ -55,7 +57,9 @@ def main() -> None:
     if cache["CMAKE_BUILD_TYPE"] != "Release":
         parser.error("Use a Release build for this campaign.")
     commands = json.loads((build / "compile_commands.json").read_text(encoding="utf-8"))
-    benchmark_command = next(row["command"] for row in commands if Path(row["file"]).name == "benchmark.cpp")
+    benchmark_command = next(
+        row["command"] for row in commands if Path(row["file"]).name == "benchmark.cpp"
+    )
     # Presets can cache the bare name g++; Ninja records the actual executable.
     compiler = Path(shlex.split(benchmark_command, posix=False)[0].strip('"'))
     if not compiler.is_absolute() or not compiler.is_file():
@@ -74,7 +78,9 @@ def main() -> None:
     ]
     power_scheme = re.search(r"[\da-fA-F]{8}-(?:[\da-fA-F]{4}-){3}[\da-fA-F]{12}",
                              command_text(["powercfg", "/getactivescheme"]))
+    mode = "arrivals" if args.arrivals else "campaign"
     metadata = {
+        "mode": mode,
         "head": command_text(["git", "rev-parse", "HEAD"]),
         "git_status_before": command_text(["git", "status", "--porcelain", "-uall"]).splitlines(),
         "source_sha256": {p.relative_to(ROOT).as_posix(): sha256(p) for p in sources},
@@ -105,18 +111,26 @@ def main() -> None:
     with (output / "raw.csv").open("w", newline="", encoding="utf-8") as raw:
         writer = csv.writer(raw, lineterminator="\n")
         for index, count in enumerate(args.sizes):
-            state_path = "-" if args.no_states else str(output / f"final-{count}.csv")
             command = [
-                str(executable), "campaign", str(count), str(args.steps), str(args.seed),
-                str(args.repetitions), state_path, *map(str, args.threads),
+                str(executable), mode, str(count), str(args.steps), str(args.seed),
+                str(args.repetitions),
             ]
-            result = subprocess.run(command, env=environment, stdout=subprocess.PIPE, text=True, check=True)
+            if args.arrivals:
+                rows_per_round = (args.steps + 1) * sum(args.threads)
+            else:
+                state_path = "-" if args.no_states else str(output / f"final-{count}.csv")
+                command.append(state_path)
+                rows_per_round = 1 + len(args.threads)
+            command.extend(map(str, args.threads))
+            result = subprocess.run(
+                command, env=environment, stdout=subprocess.PIPE, text=True, check=True
+            )
             reader = csv.reader(io.StringIO(result.stdout))
             header = next(reader)
             if index == 0:
                 writer.writerow(header)
             rows = list(reader)
-            if len(rows) != args.repetitions * (1 + len(args.threads)):
+            if len(rows) != args.repetitions * rows_per_round:
                 raise ValueError(f"Incomplete campaign for N={count}.")
             writer.writerows(rows)
             raw.flush()
