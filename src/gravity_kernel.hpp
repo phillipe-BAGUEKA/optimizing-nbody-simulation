@@ -13,11 +13,11 @@ void fill_accelerations_sequential(
 );
 void fill_accelerations_openmp(
     const std::vector<Body>& bodies, const GravityParameters& parameters,
-    std::vector<Vec3>& accelerations, int* observed_thread_count
+    std::vector<Vec3>& accelerations, int* observed_thread_count, int dynamic_chunk = 0
 );
 std::vector<ThreadArrival> trace_accelerations_openmp(
     const std::vector<Body>& bodies, const GravityParameters& parameters,
-    std::vector<Vec3>& accelerations
+    std::vector<Vec3>& accelerations, int dynamic_chunk
 );
 void validate_accelerations(const std::vector<Vec3>& accelerations);
 } // namespace nbody::detail

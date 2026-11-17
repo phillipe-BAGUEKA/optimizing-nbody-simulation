@@ -50,17 +50,20 @@ Options parse_options(int argc, char* argv[])
         const std::string_view value = argv[++index];
         if (argument == "--solver")
         {
-            if (value == "sequential")
+            bool found = false;
+            for (const auto solver : {nbody::AccelerationSolver::Sequential, nbody::AccelerationSolver::OpenMP,
+                                      nbody::AccelerationSolver::Dynamic16, nbody::AccelerationSolver::Dynamic64})
             {
-                options.solver = nbody::AccelerationSolver::Sequential;
+                if (value == nbody::solver_name(solver))
+                {
+                    options.solver = solver;
+                    found = true;
+                    break;
+                }
             }
-            else if (value == "openmp")
+            if (!found)
             {
-                options.solver = nbody::AccelerationSolver::OpenMP;
-            }
-            else
-            {
-                throw std::invalid_argument("Solver must be sequential or openmp.");
+                throw std::invalid_argument("Solver must be sequential, openmp, dynamic16 or dynamic64.");
             }
         }
         else if (argument == "--case")
@@ -107,9 +110,9 @@ Options parse_options(int argc, char* argv[])
     {
         throw std::invalid_argument("Thread count must be strictly positive.");
     }
-    if (options.threads_specified && options.solver != nbody::AccelerationSolver::OpenMP)
+    if (options.threads_specified && options.solver == nbody::AccelerationSolver::Sequential)
     {
-        throw std::invalid_argument("--threads is only valid with --solver openmp.");
+        throw std::invalid_argument("--threads is only valid with an OpenMP solver.");
     }
     return options;
 }
@@ -136,14 +139,14 @@ int main(int argc, char* argv[])
         const Options options = parse_options(argc, argv);
         if (options.help)
         {
-            std::cout << "Usage: nbody_demo [--solver sequential|openmp]\n"
+            std::cout << "Usage: nbody_demo [--solver sequential|openmp|dynamic16|dynamic64]\n"
                       << "                  [--case two-body|multi-body] [--steps N] [--dt VALUE]\n"
                       << "                  [--threads N (OpenMP only)] [--diagnostics]\n"
                       << "Defaults: sequential, two-body, 10 steps, dt=0.01, 1 OpenMP thread.\n";
             return 0;
         }
 
-        const bool parallel = options.solver == nbody::AccelerationSolver::OpenMP;
+        const bool parallel = options.solver != nbody::AccelerationSolver::Sequential;
         if (parallel)
         {
             omp_set_dynamic(0);
@@ -156,7 +159,7 @@ int main(int argc, char* argv[])
         };
 
         std::cout << std::setprecision(17)
-                  << "Solver: " << (parallel ? "openmp" : "sequential")
+                  << "Solver: " << nbody::solver_name(options.solver)
                   << "\nCase: " << options.case_name
                   << "\nSteps: " << options.steps << "\nTime step: " << options.time_step
                   << "\nG: " << parameters.gravitational_constant

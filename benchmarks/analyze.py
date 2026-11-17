@@ -33,7 +33,9 @@ class Summary:
     efficiency: float
 
 
-def summarize(rows: list[dict[str, str]]) -> list[Summary]:
+def summarize(
+    rows: list[dict[str, str]], solvers: tuple[str, ...] = ("sequential", "openmp")
+) -> list[Summary]:
     cases = sorted({int(row["n"]) for row in rows})
     if not cases:
         raise ValueError("The input contains no measurements.")
@@ -50,7 +52,7 @@ def summarize(rows: list[dict[str, str]]) -> list[Summary]:
             key = (row["solver"], p)
             duration = float(row["elapsed_s"])
             valid_team = p >= 1 and p == int(row["requested_threads"])
-            if not valid_team or key[0] not in {"sequential", "openmp"}:
+            if not valid_team or key[0] not in solvers:
                 raise ValueError(f"Unexpected solver or team size for N={n}.")
             if not math.isfinite(duration) or duration <= 0:
                 raise ValueError(f"Invalid duration for N={n}.")
@@ -65,7 +67,7 @@ def summarize(rows: list[dict[str, str]]) -> list[Summary]:
         if len(rounds) < 2 or any(set(samples) != rounds for samples in times.values()):
             raise ValueError(f"Quartiles need at least two complete rounds for N={n}.")
         serial = statistics.median(times[("sequential", 1)].values())
-        order = sorted(times, key=lambda key: (key[0] == "openmp", key[1]))
+        order = sorted(times, key=lambda key: (solvers.index(key[0]), key[1]))
         for solver, p in order:
             samples = times[solver, p]
             median = statistics.median(samples.values())

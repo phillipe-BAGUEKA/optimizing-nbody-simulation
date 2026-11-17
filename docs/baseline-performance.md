@@ -107,8 +107,8 @@ cmake --preset ucrt64-release -B build/ucrt64-profile '-DCMAKE_CXX_FLAGS_RELEASE
 cmake --build build/ucrt64-profile --target nbody_benchmark
 & $analysisPython benchmarks/profile_openmp.py --output build/repeat-profile
 & $analysisPython benchmarks/profile_openmp.py --replay results/profile --output build/replayed-symbols
-pdflatex -interaction=nonstopmode -halt-on-error -output-directory=report report/main.tex
-pdflatex -interaction=nonstopmode -halt-on-error -output-directory=report report/main.tex
+pdflatex -interaction=nonstopmode -halt-on-error -jobname=Phillipe_BAGUEKA_NBody_OpenMP_Report -output-directory=report report/main.tex
+pdflatex -interaction=nonstopmode -halt-on-error -jobname=Phillipe_BAGUEKA_NBody_OpenMP_Report -output-directory=report report/main.tex
 ```
 
 The profile script runs `nbody_benchmark.exe profile 3072 12 20261117 60 4`, then `profiler.exe -v -e -s 100 -p -<WindowsPID>`. The Windows PID varies on each run. The script records HEAD, dirty paths, hashes of the source files and the executable before attachment and verifies the files again after capture. GNU `objcopy --only-keep-debug` extracts the linked section addresses and DWARF symbols. The archived histogram and symbol file are both checksummed. The replay command resolves the original bins directly from these two files, including on a checkout where the original build directory is gone. [Detached symbols](../results/profile/executable.debug) · [Capture and symbol export](../benchmarks/profile_openmp.py) · [Figure generator](../benchmarks/analyze.py)

@@ -26,9 +26,10 @@ Codex handles local cloning, environment inspection, and setup commands directly
 - [x] First unprofiled Release campaign completed with two sizes, a genuine sequential reference and five OpenMP team sizes. Raw measurements, dispersion, speedup, efficiency and a reproducible figure are available.
 - [x] A separate Windows sampling capture locates the OpenMP force loop in the GCC binary. The protocol and evidence are in [the baseline campaign](baseline-performance.md).
 - [x] Pre-barrier finishes measured at 4 and 12 threads on the same 3,072-body case. Six repetitions per team yielded 78 evaluation spreads each. [Raw trace and analysis](baseline-performance.md#thread-arrival-experiment)
-- [ ] Limiting resource tested, optimization selected, implemented and remeasured.
+- [x] Target work distribution tested with static, dynamic 16 and dynamic 64. Dynamic 16 met the two-pass timing criterion on the primary case. [Optimization results](../results/optimization/summary.csv)
+- [x] Ten-page semester report and single submission archive prepared. [Report and reproduction](../README.md#submission)
 
-The learner reports having studied the physical model, softening, integrators and complexity. The provisional generator, correctness checks and first measurements are available for guided analysis. Milestone 2 still needs definitive data and convergence work. For milestone 3, the measurements are complete and the learner's independent explanation of the decomposition and barriers is pending. Milestone 4 has baseline evidence for the next experiment.
+The learner reports having studied the physical model, softening, integrators and complexity. The provisional generator, correctness checks, baseline profile and scheduling comparison are available for guided analysis. Definitive variant values, convergence studies and the learner's independent explanation of the decomposition and barriers remain open.
 
 ## Milestone 0 - Practical setup
 

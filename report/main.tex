@@ -1,406 +1,364 @@
-\documentclass[11pt,a4paper]{article}
+\documentclass[12pt,a4paper]{article}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage{lmodern}
-\usepackage[margin=25mm]{geometry}
-\usepackage{amsmath,amssymb,booktabs}
-\usepackage{graphicx}
-\usepackage[hidelinks]{hyperref}
-\hypersetup{pdftitle={Optimizing N-Body Simulation: Strong scaling and OpenMP thread arrivals},
-            pdfauthor={Semester project in parallel programming}}
+\usepackage{lmodern,microtype}
+\usepackage[a4paper,left=23mm,right=23mm,top=24mm,bottom=22mm,headheight=15pt]{geometry}
+\usepackage{amsmath,amssymb,booktabs,array}
+\usepackage{graphicx,xcolor,tikz,caption,float,fancyhdr}
+\usetikzlibrary{arrows.meta,positioning,calc}
+\definecolor{accent}{HTML}{155B72}
+\definecolor{ink}{HTML}{1E2E36}
+\definecolor{wash}{HTML}{EDF4F6}
+\usepackage[colorlinks=true,urlcolor=accent,linkcolor=accent]{hyperref}
+\hypersetup{pdftitle={Implementation, Profiling, and Optimization of an N-Body Simulation},
+  pdfauthor={Phillipe BAGUEKA},pdfsubject={Parallel Programming semester project}}
+\urlstyle{same}
+\newcommand{\repourl}{https://github.com/phillipe-BAGUEKA/optimizing-nbody-simulation}
+\newcommand{\dataref}[2]{\href{\repourl/blob/main/#1}{#2}}
+\captionsetup{font=small,labelfont={bf,color=accent},justification=raggedright,singlelinecheck=false}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\sffamily Parallel Programming}
+\fancyhead[R]{\small\sffamily Direct N-body simulation}
+\fancyfoot[L]{\small\sffamily Phillipe BAGUEKA}
+\fancyfoot[R]{\small\sffamily\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{6pt}
-\title{Optimizing N-Body Simulation\\\large Correctness, strong scaling and OpenMP thread arrivals}
-\author{Semester project in parallel programming}
-\date{18 November 2026}
-
+\setlength{\emergencystretch}{2em}
+\raggedbottom
+\newcommand{\topic}[1]{\clearpage{\color{accent}\sffamily\bfseries\fontsize{22}{26}\selectfont #1\par}\vspace{2mm}}
+\newcommand{\subtopic}[1]{\par\addvspace{3mm}{\large\sffamily\bfseries\color{ink}#1\par}\nobreak}
+\tikzset{box/.style={draw=accent,rounded corners=2pt,fill=wash,align=center,inner sep=6pt},
+  arrow/.style={-Latex,thick,draw=accent}}
 \begin{document}
-\maketitle
+\thispagestyle{empty}
+{\sffamily\bfseries\Large Technical University of Sofia\par}
+{\sffamily\large Parallel Programming\par}
+\vspace{30mm}
+{\color{accent}\rule{22mm}{1.6pt}\par}
+\vspace{3mm}
+{\large\sffamily\bfseries\color{accent}SEMESTER PROJECT\par}
+\vspace{2mm}
+{\sffamily\bfseries\fontsize{23}{29}\selectfont
+Implementation, Profiling, and Optimization\\
+of an N-Body Simulation\par}
+\vspace{9mm}
+{\sffamily\bfseries\fontsize{15}{20}\selectfont Phillipe BAGUEKA - ERASMUS STUDENT\par}
+\vspace{14mm}
+\begin{minipage}{0.86\textwidth}\large
+This study follows a direct three-dimensional gravitational simulation from a
+C++20 sequential reference to an OpenMP implementation. Thread finish times
+motivate an experiment with dynamic work distribution. Two timing campaigns
+test whether smaller chunks reduce the time for a complete simulation.
+\end{minipage}
+\par\vspace{10mm}
+{\sffamily\href{\repourl}{GitHub repository\enspace optimizing-nbody-simulation}\par}
+\vfill
+{\large\sffamily Academic Year 2026--2027\par}
 
-\section{Objective and current scope}
-The project studies a direct three-dimensional gravitational simulation in
-C++20 and OpenMP. This report records a sequential solver, a baseline parallel
-solver, their shared Velocity Verlet integrator, and independent correctness
-checks. A first experiment measures strong scaling on two fixed problem sizes.
-A Windows sampling profile locates the code executed by the OpenMP workers.
-A separate experiment measures when each worker finishes its assigned targets.
-The implementation uses double precision and provisional educational data.
+\topic{Model and experimental inputs}
+How much faster can one CPU simulate the same system when several threads
+share the force calculation? The comparison fixes the physics, the initial
+state and the sequence of time steps. Only the assignment of target bodies
+to workers changes between the parallel versions.
 
-The final report will target 12--18 pages of main text. Definitive input data,
-convergence, selection and testing of an optimization, and visualization remain
-future work. The learner's guided analysis of the code and profile is pending.
-
-\section{State and softened gravitational model}
-Each body has a positive mass $m_i$, a position $\mathbf r_i$, and a velocity
-$\mathbf v_i$. Bodies are stored in a contiguous \texttt{std::vector<Body>}.
-Current and next accelerations are stored in two separate vectors of
-\texttt{Vec3}; there is no interaction matrix.
-
-For source $j$ and target $i$, define
-\begin{align}
- \mathbf d_{ij} &= \mathbf r_j-\mathbf r_i,\\
- q_{ij} &= \mathbf d_{ij}\cdot\mathbf d_{ij}+\epsilon^2,\\
- \mathbf a_i &= \sum_{\substack{j=0\\j\ne i}}^{N-1}
-       \mathbf d_{ij}\frac{Gm_j}{q_{ij}\sqrt{q_{ij}}}.
-\end{align}
-Here $G>0$ and $\epsilon>0$. The target mass is absent from its acceleration.
-Positive softening removes the zero-distance denominator for moderate inputs.
-All source positions and masses remain unchanged during a complete force
-evaluation. The sequential and parallel solvers use the same source order.
-
-\section{Velocity Verlet and phase dependencies}
-Compute $\mathbf a^0$ from the initial positions before entering the time loop.
-For a fixed step $\Delta t>0$, execute
-\begin{align}
- \mathbf r_i^{n+1} &= \mathbf r_i^n + \mathbf v_i^n\Delta t
-                  + \tfrac12\mathbf a_i^n\Delta t^2,\\
- \mathbf a^{n+1} &= A(\mathbf r^{n+1}),\\
- \mathbf v_i^{n+1} &= \mathbf v_i^n
-                  + \tfrac12(\mathbf a_i^n+\mathbf a_i^{n+1})\Delta t.
-\end{align}
-Every position update must finish before $A$ reads the new state. All new
-accelerations must be available before the velocity update. Finally, swap
-the two acceleration buffers. This reuses $\mathbf a^{n+1}$ at the next step.
-One integrator selects the solver through a simple enum. The time loop and
-both state-update loops remain sequential.
-
-\section{Computational work and storage}
-One full evaluation contains $N(N-1)$ directed pair contributions.
-For $K$ steps, initialization plus one evaluation per step gives exactly
-$K+1$ evaluations and $(K+1)N(N-1)$ contributions. Validation and state
-updates add linear passes. Force work is quadratic in $N$; parallel execution
-does not change that algorithmic complexity.
-
-Bodies and two acceleration buffers require $\Theta(N)$ storage. No complete
-trajectory is retained. Storing all $K+1$ states in a later export feature
-would instead require $\Theta((K+1)N)$ storage. This cost is not incurred by
-the current integrator.
-
-\section{OpenMP decomposition and memory safety}
-Only the outer loop over targets is parallel:
-\begin{verbatim}
-#pragma omp parallel for default(none) schedule(static) \
-    shared(bodies, parameters, accelerations, observed_thread_count) \
-    firstprivate(body_count)
-\end{verbatim}
-The acceleration output is allocated before the region. Each iteration owns
-one target, accumulates in a local vector, and writes only its own output
-element. Bodies and physical parameters are shared read-only. The inner
-source loop is sequential. No global reduction, lock, or atomic is required.
-
-The implicit barrier at the end of the region completes all outputs before
-they are checked or consumed. An optional diagnostic, disabled by default,
-records \texttt{omp\_get\_num\_threads()} only in target iteration zero. A
-single writer and the final barrier make this diagnostic safe. It measures
-the actual force-computation team, not a separate probe region.
-
-\section{Inputs and numerical boundaries}
-At solver entry, reject non-finite state, nonpositive masses, invalid $G$ or
-$\epsilon$, and acceleration arrays whose size differs from the body count.
-Simulation also requires a valid solver, positive finite $\Delta t$, and a
-finite nonzero squared-step coefficient. Checks precede parallel work.
-Non-finite force outputs are rejected after the region, without exceptions
-escaping a worker.
-
-Empty systems are valid and launch no parallel region. One isolated body has
-zero acceleration and constant velocity. Zero steps evaluate the initial
-accelerations but leave positions and velocities unchanged. Numerical failure
-during in-place evolution does not roll back partial updates; discard that
-result. Direct products in double precision do not provide general protection
-against extreme scales or all underflow cases.
-
-\section{Provisional examples}
-Use normalized units $M$, $L$, $T$: velocities have units $L/T$, accelerations
-$L/T^2$, and $G$ has units $L^3/(MT^2)$. Both examples set $G=1$; no SI or
-astronomical interpretation is implied. The teacher's individual variant is
-still unavailable.
-
-\subsection{Two-body arithmetic reference}
-Body A has $m_A=2$, $\mathbf r_A=(0,0,0)$; body B has $m_B=10$,
-$\mathbf r_B=(0,3,0)$. Both velocities start at zero. Set $\epsilon=4$ to
-obtain $q=25$ and $q\sqrt q=125$. Thus
+\subtopic{One acceleration from a complete set of positions}
+Body $i$ stores mass $m_i>0$, position $\mathbf r_i$ and velocity $\mathbf v_i$
+in double precision. The softened acceleration from all other bodies is
 \[
- \mathbf a_A=(0,0.24,0),\qquad \mathbf a_B=(0,-0.048,0).
+ \mathbf a_i=\sum_{j\ne i}\frac{Gm_j\,(\mathbf r_j-\mathbf r_i)}
+ {\bigl(\|\mathbf r_j-\mathbf r_i\|^2+\epsilon^2\bigr)^{3/2}} .
 \]
-The opposing forces satisfy $m_A\mathbf a_A+m_B\mathbf a_B=\mathbf 0$.
-This softening choice simplifies arithmetic; it is not a scientific
-recommendation. The one-step integration reference uses $\Delta t=0.5$.
+The direction points from the target to the source. The source mass determines
+the acceleration contribution. The target mass cancels when dividing force by
+mass. Softening keeps the denominator positive when two positions coincide
+and changes the short-range force law. Each target visits sources in ascending
+index order and skips itself.
 
-\subsection{Four-body deterministic example}
-Use $\epsilon=0.1$ and the explicit initial state below. The demonstration
-executes 25 steps at $\Delta t=0.01$. This case is not claimed to be in equilibrium.
-\begin{center}
-\small
-\begin{tabular}{crrr}
-\toprule
-Body & Mass & Position & Velocity \\
-\midrule
-0 & 2 & $(-1,0,0.5)$ & $(0.05,0.10,-0.02)$ \\
-1 & 1.5 & $(1,0.5,-0.5)$ & $(-0.10,0.02,0.03)$ \\
-2 & 0.75 & $(0,-1,1)$ & $(0.04,-0.03,0.08)$ \\
-3 & 3 & $(0.5,1.5,0.25)$ & $(-0.02,0.06,-0.04)$ \\
-\bottomrule
-\end{tabular}
-\end{center}
+\subtopic{Provisional individual variant}
+All values use normalized units. For a length unit $L$, mass unit $M$ and
+time unit $T$, velocity has units $L/T$, $G$ has units $L^3/(MT^2)$ and
+$\epsilon$ is a length. No calibration to a physical system is assumed.
+\begin{center}\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}ll@{}}\toprule
+Quantity & Value used for timing and profiling \\\midrule
+Bodies $N$ / integration steps $K$ & 1,536 or 3,072 / 12 \\
+$G$ / $\epsilon$ / $\Delta t$ & 1 / 0.05 / 0.0005 \\
+Generator / seed & \texttt{std::mt19937\_64} / 20261117 \\
+Mass & $[0.5,1.5)$ per body \\
+Position / velocity & $[-1,1)$ / $[-0.1,0.1)$ per component \\\bottomrule
+\end{tabular}\end{center}
+The generator converts the high 53 bits of each draw to a uniform number in
+$[0,1)$. For each body it draws mass, then three positions, then three
+velocities. The assignment lists the fields of the individual variant. A
+personalized numeric tuple was absent from the available materials. The
+two-body verification on page~5 uses an independent, hand-checkable input.
 
-\section{Validation actually performed}
-Both C++20/OpenMP presets built without warnings using MSYS2 UCRT64 GCC
-16.2.0 on Windows 11 (Intel Core 7 150U, 10 cores, 12 logical processors).
-Debug and Release each passed the eight baseline tests and the ninth arrival
-test. Checks remain active with \texttt{NDEBUG}. The two-body diagnostic
-also verified that two idle workers recorded a finish.
-
-The independent reference literals for the two-body step are:
-\begin{center}
-\begin{tabular}{ll}
-\toprule
-Quantity & Expected $y$ component \\
-\midrule
-Position A & $0.03$ \\
-Position B & $2.994$ \\
-Velocity A & $0.12005194016285471$ \\
-Velocity B & $-0.024010388032570942$ \\
-\bottomrule
-\end{tabular}
-\end{center}
-All other components are zero. Both solver modes passed these references.
-For example, the printed Release velocities were
-$0.12005194016285471$ and $-0.024010388032570943$ along $y$.
-Expected values are not computed by the tested implementation.
-
-Physics and equivalence comparisons reject non-finite values and require
-\[
- |x-y|\leq 10^{-12}+10^{-12}\max(|x|,|y|).
-\]
-For both examples, accelerations and integrated states were compared at
-0, 1, 2 and 25 steps with 1, 2 and 4 requested threads. Observed teams were
-respectively 1, 2 and 4 in the actual force loop. Independent physics tests
-are essential: agreement between solvers alone would also allow shared bugs.
-
-Additional checks cover vector arithmetic, preserved inputs and masses,
-opposite forces, isolated uniform motion, coincident bodies, empty systems,
-zero steps, output sizes, invalid inputs and numeric failures. Ten continuous
-steps match ten restarted one-step calls, checking acceleration reuse.
-Fourteen CLI error cases require both the expected message and exit code 1.
-Sequential and OpenMP demonstrations were run on both examples.
-
-\section{First strong-scaling experiment}
-The machine ran Windows 11 Home build 26300 on the Core 7 150U described
-above. We used the Balanced power plan, UCRT64 GCC 16.2.0, libgomp and
-the Release flags \texttt{-O3 -DNDEBUG -std=c++20 -fopenmp}, plus warnings.
-The working tree contained local changes above commit \texttt{9bd8716}.
-The binary, source fingerprints and effective commands are recorded in
-\path{results/baseline/metadata.json}. Thread placement, background load
-and CPU frequency were uncontrolled.
-
-\textbf{Workload.} The generator uses the upper 53 bits of each draw from
-\texttt{mt19937\_64} with seed 20261117. It draws a mass in $[0.5,1.5)$,
-three position coordinates in $[-1,1)$ and three velocity coordinates in
-$[-0.1,0.1)$ per body. We set $G=1$, $\epsilon=0.05$, $\Delta t=0.0005$
-and $K=12$. A one-round pilot gave sequential times of 10.4, 98.9 and
-486.7\,ms at 512, 1,536 and 3,072 bodies. The 12-thread times were 6.8,
-42.1 and 131.6\,ms. The latter two sizes kept trials measurable at all
-requested thread counts and affordable to repeat.
-
-\textbf{Timing boundary.} Each configuration uses fresh copies of one master
-state per size. A checked warm-up validates every final position and velocity
-against the true sequential reference using the tolerance above and records
-the actual team. The measured run starts its \texttt{steady\_clock} interval
-at the initial force evaluation and stops after the last buffer swap. This
-includes all 13 force evaluations and both linear state-update phases.
-The per-pair numerical guard remains in the shared force code. Copies,
-allocations, diagnostic scans, comparisons, fingerprints and file output are
-outside the interval. The benchmark verifies each measured final state again.
-
-\textbf{Order.} Each size ran six configurations for six rounds. Round one
-started with sequential, followed by OpenMP 1, 2, 4, 8 and 12. The starting
-configuration advanced one place per round. Each configuration occupied
-each order position once. The two sizes ran consecutively. The controls
-observed each requested team size in the actual target loop.
-
-\clearpage
-\section{Unprofiled Release results}
-For each case, $S_p=\operatorname{median}(T_{\rm seq})/
-\operatorname{median}(T_{{\rm omp},p})$ and $E_p=S_p/p$. The interquartile
-range (IQR) is $Q_3-Q_1$ using inclusive linear interpolation. Each row
-summarizes six simulations. The sequential rows define the reference.
-
-\begin{center}
-\small
-\input{results/baseline/timings.tex}
-\end{center}
-
-\begin{figure}[ht]
-\centering
-\includegraphics[width=0.90\linewidth]{results/baseline/speedup.pdf}
-\caption{OpenMP speedup by thread count. Each point divides the sequential
-solver's median time at the same $N$ by the OpenMP median. Both medians use
-six unprofiled repetitions. The dashed line marks unit speedup.}
+\topic{Velocity Verlet and the reference}
+The sequential solver accumulates the force for every target on one thread.
+The driver computes $\mathbf a^0=A(\mathbf r^0)$ once. Step $n\to n+1$ then
+updates the state in this order:
+\begin{align*}
+ \mathbf r_i^{n+1}&=\mathbf r_i^n+\mathbf v_i^n\Delta t+
+                               \tfrac12\mathbf a_i^n\Delta t^2,\\
+ \mathbf a^{n+1}&=A(\mathbf r^{n+1}),\\
+ \mathbf v_i^{n+1}&=\mathbf v_i^n+
+                       \tfrac12(\mathbf a_i^n+\mathbf a_i^{n+1})\Delta t .
+\end{align*}
+\begin{figure}[H]\centering
+\begin{tikzpicture}[font=\normalsize, node distance=7mm]
+\node[box,text width=91mm] (init) {\textbf{Initialize once}\\Compute $\mathbf a^0$ from all initial positions};
+\node[box,text width=91mm,below=of init] (pos) {\textbf{Advance every position}\\Read $\mathbf r^n,\mathbf v^n,\mathbf a^n$ and write $\mathbf r^{n+1}$};
+\node[box,text width=91mm,below=of pos] (force) {\textbf{Evaluate the new forces}\\Read the full $\mathbf r^{n+1}$ and write $\mathbf a^{n+1}$};
+\node[box,text width=91mm,below=of force] (vel) {\textbf{Advance every velocity}\\Combine $\mathbf a^n$ with $\mathbf a^{n+1}$ and swap buffers};
+\draw[arrow] (init)--(pos);
+\draw[arrow] (pos)--(force);
+\draw[arrow] (force)--(vel);
+\draw[arrow] (vel.east) -- ++(6mm,0) |- (pos.east);
+\end{tikzpicture}
+\caption{The return arrow reuses the latest accelerations in the next step.
+Only the force evaluations change implementation between solvers.}
 \end{figure}
+The position loop finishes before any worker reads the new sources. Computing
+the force on one body immediately after moving it would mix positions from
+two time levels. The result would then depend on the update order.
 
-The serial and one-thread OpenMP medians differ by 5.2 and 4.4\,ms.
-At $N=3{,}072$ the one-thread OpenMP IQR is 25.5\,ms, so these differences
-do not isolate the cost of entering a parallel region. At 12 threads the
-larger case reached $3.54\times$ speedup and 29.5\% efficiency. Increasing
-$N$ doubled the number of targets and nearly quadrupled the directed
-pair contributions, from 30,650,880 to 122,643,456 per run.
+Verlet keeps two acceleration arrays. Swapping them preserves the latest
+evaluation for the following step. Thus $K$ steps use $K+1$ force evaluations,
+including the initial evaluation when $K=0$. At $K=12$ the benchmark pays
+for 13 complete force evaluations.
 
-\clearpage
-\section{Sampling the four-thread force loop}
-We built a separate UCRT64 Release executable with the same compiler flags
-and \texttt{-g}. It repeated the 3,072-body, 12-step, four-thread case
-60 times from its original state in one process. The command ran 780
-force evaluations in total. Every batch yielded the same final
-fingerprint as the unprofiled campaign. The MSYS2 Cygwin
-\href{https://cygwin.com/cygwin-ug-net/profiler.html}{sampling profiler}
-(3.6.10) attached to the initialized Windows process at a requested
-100\,Hz. The capture covered the remaining workload, including checks and
-fingerprints between batches.
+\topic{How OpenMP shares the work}
+The baseline applies \texttt{schedule(static)} to the outer loop over targets.
+One worker owns the three-component sum for a target until it writes the
+corresponding element of the acceleration vector. The inner source loop
+uses exactly the same arithmetic and order as the sequential reference.
+\begin{figure}[H]\centering
+\begin{tikzpicture}[font=\normalsize, node distance=7mm and 8mm]
+\node[box,text width=104mm] (source) {\textbf{Shared, read-only source state}\\
+$(m_0,\mathbf r_0)\quad(m_1,\mathbf r_1)\quad(m_2,\mathbf r_2)\quad(m_3,\mathbf r_3)$};
+\node[box,text width=57mm,below=10mm of source,xshift=-33mm] (t0) {\textbf{Thread 0}\\Target 0 sums sources 1, 2, 3.\\Target 1 sums sources 0, 2, 3.};
+\node[box,text width=57mm,right=of t0] (t1) {\textbf{Thread 1}\\Target 2 sums sources 0, 1, 3.\\Target 3 sums sources 0, 1, 2.};
+\node[box,text width=57mm,below=of t0] (o0) {Own writes: $\mathbf a[0],\,\mathbf a[1]$};
+\node[box,text width=57mm,below=of t1] (o1) {Own writes: $\mathbf a[2],\,\mathbf a[3]$};
+\node[box,text width=104mm,below=10mm of o0,xshift=33mm] (join) {\textbf{Team joins}\\Verlet can read the complete acceleration vector.};
+\draw[arrow] (source.south -| t0) -- (t0);
+\draw[arrow] (source.south -| t1) -- (t1);
+\draw[arrow] (t0)--(o0); \draw[arrow] (t1)--(o1);
+\draw[arrow] (o0.south) -- (join.north -| o0);
+\draw[arrow] (o1.south) -- (join.north -| o1);
+\end{tikzpicture}
+\caption{Four targets and two workers. Both workers read the same four source
+records. Each output has a single writer, so the force loop needs no atomics
+or cross-thread reduction.}
+\end{figure}
+For four bodies each target contributes three directed interactions, twelve
+in total. At general $N$ the implementation evaluates $N(N-1)$ directed
+pairs per call and performs $O((K+1)N^2)$ work. It stores $N$ bodies and
+two $N$-element acceleration buffers, giving $O(N)$ solver storage.
+At 3,072 bodies and 12 steps the kernel evaluates 122,643,456 directed pairs.
 
-\textbf{Thread activity.} Windows reported individual thread events and
-the loaded GNU OpenMP runtime. We also read OS user and kernel CPU counters
-twice for the same process during sampling. In 3.432\,s of wall time, four
-thread IDs accumulated 2.688, 2.453, 2.641 and 2.688 CPU seconds.
-All seven threads present at both snapshots accumulated 10.484 CPU seconds
-in total. This 3.432\,s interval covers two CPU snapshots and the requested
-three-second pause between them. The batch log contains sequence numbers
-and final hashes without timestamps. It cannot tell which of the 60
-simulations or force evaluations overlapped the window. Wall time advances
-once while CPU time can accumulate concurrently across threads.
+The end of the parallel region synchronizes workers before Verlet consumes
+their output. Changing who acquires a target can change when that join
+completes, while each target still reads the same source snapshot.
 
-\textbf{Function attribution.} The profiler periodically reads thread
-instruction pointers, including those of threads in waits, and groups hits
-by module. For the executable we translated the runtime addresses to the
-linked \texttt{.text} section to account for Windows address randomization.
-GNU \texttt{addr2line} then recovered the GCC inline chain at each four-byte
-bin start. The archive includes the detached GCC symbols, the native
-histogram and SHA-256 fingerprints of their inputs. The sample counts were:
+\topic{Numerical checks and timing}
+\subtopic{What qualifies as a correct run?}
+A two-body case starts at rest with masses 2 and 10, separated by 3 on the
+$y$ axis. With $G=1$ and $\epsilon=4$, the denominator is
+$(3^2+4^2)^{3/2}=125$. The initial $y$ accelerations are $+0.24$ and
+$-0.048$. After one step of length 0.5, the new $y$ positions are
+0.030 and 2.994. Including the new force gives velocities
+$+0.1200519402$ and $-0.0240103880$. This case exercises both signs, the
+source masses and the second force evaluation.
 
-\begin{center}
-\small
-\begin{tabular}{lr}
-\toprule
-Population & Sampled instruction pointers \\
-\midrule
-All mapped modules & 10,471 \\
-\quad Windows \texttt{ntdll.dll} & 5,552 \\
-\quad Other DLLs combined & 3 \\
-\quad Benchmark executable & 4,916 \\
-\qquad Of executable hits, in the OpenMP target loop & 4,914 \\
-\bottomrule
-\end{tabular}
-\end{center}
+For each timed run a checked sequential simulation supplies all reference
+positions and velocities. For every scalar component the acceptance rule is
+\[
+  |x_{\rm candidate}-x_{\rm seq}|
+  \le 10^{-12}+10^{-12}\max(|x_{\rm candidate}|,|x_{\rm seq}|).
+\]
+Both arguments must be finite, and masses must match exactly. Every timing
+and arrival run passed. For each size all recorded final fingerprints also
+matched. The CTest suite includes zero steps, a single body, coincident
+positions, invalid inputs, idle workers and a partially filled dynamic chunk.
 
-The target loop accounts for 99.96\% of executable hits.
-At linked bin \texttt{0x140002fd4}, 961 samples resolve to vector
-multiplication in the inline chain through the gravitational contribution and
-the per-target source loop. The sample bins pool threads. Their counts do
-not measure elapsed seconds, useful CPU cycles or barrier waiting time.
-Function attribution alone cannot tell whether arithmetic latency, memory
-stalls or arrival imbalance explains the scaling curve.
+\subtopic{Machine, repetitions and clock boundary}
+Windows 11 Home (build 26300) ran on an Intel Core 7 150U with 10 physical
+cores and 12 logical processors under the Balanced power plan. The Release
+build used MSYS2 UCRT64 GCC 16.2.0, C++20, \texttt{-O3 -DNDEBUG -fopenmp}
+and libgomp. The runtime disabled dynamic team sizing. A checked warm-up
+verified the requested team; Windows controlled placement and frequency.
 
-\textbf{Following up the profile.} The next experiment isolates the time
-between the first and last worker to finish a force calculation. Arithmetic
-latency and memory stalls would require separate hardware-counter measurements.
+For each size, one reference and one checked warm-up per configuration precede
+measurement. Each repetition starts from a fresh copy. The monotonic clock
+starts before the initial force and stops after the last buffer swap. The
+interval includes all force work, joins and integration updates. Copying the
+input, allocating the two buffers, final validation, hashing and CSV output
+fall outside it. Timing runs have no profiler or per-thread timestamps.
 
-The raw CSV, complete final states, figure generator, profile exports and
-exact reproduction commands are indexed in \path{docs/baseline-performance.md}.
-Definitive assignment data, convergence and long-term invariant tests,
-an optimized comparison and trajectory visualization remain future stages.
+An initial campaign used six rounds at $p=1,2,4,8,12$. The scheduling
+comparison repeated that protocol twice with all policies in the same
+executable. Pass B reversed size and team order. Within a size the starting
+configuration rotates and the traversal direction alternates between rounds.
+Dispersion is $Q_3-Q_1$ using inclusive, linearly interpolated quartiles.
+\topic{What the static baseline achieved}
+At fixed problem size, speedup is $S_p=T_{\rm seq}/T_p$, using median times
+from the same campaign. The denominator of efficiency is the requested and
+verified team size, $E_p=S_p/p$. The sequential reference executes an
+ordinary C++ loop without creating an OpenMP team.
+\begin{figure}[H]\centering
+\includegraphics[width=\linewidth]{results/baseline/speedup.pdf}
+\caption{Initial strong-scaling campaign. Each speedup uses the sequential
+solver of the same size; timing points represent medians of six repetitions.}
+\end{figure}
+For 3,072 bodies, the median fell from \textbf{479.7\,ms} sequentially to
+\textbf{135.3\,ms} with 12 workers. That is a $3.54\times$ speedup and
+29.5\% efficiency. Two workers already achieved $1.80\times$ at
+265.8\,ms. Adding the remaining ten workers nearly halved that time, while
+efficiency decreased as $p$ increased.
 
-\clearpage
-\section{Measuring thread arrivals}
-With 3,072 bodies, each target reads the same number of sources. Static
-scheduling on this machine gave each of four workers 768 targets, or each
-of twelve workers 256. We asked how far apart workers finished these equal
-assignments in a single force evaluation.
+For 1,536 bodies, the medians were 115.6 and 39.4\,ms at the two endpoints
+($2.94\times$, 24.5\%). Doubling $N$ nearly quadruples the number of pair
+contributions, giving more work per team launch. Both sizes nevertheless
+show diminishing returns. At a single OpenMP thread the measured medians
+were 120.9 and 484.1\,ms, illustrating why a one-thread OpenMP run is a
+different reference.
 
-\textbf{Measurement site.} For each evaluation, the calling thread allocates
-the result slots, then reads a common \texttt{steady\_clock} origin immediately
-before entering a parallel region. Each worker counts the targets it completes.
-The diagnostic uses the same per-target C++ function as the baseline. The
-sequence inside the parallel region is:
-\begin{verbatim}
-  omp for schedule(static) nowait
-      compute and store acceleration for each assigned target
-      count this target locally
-  read steady_clock once
-  store the count and finish offset in this thread's slot
-  join the parallel region
-\end{verbatim}
-The \texttt{nowait} clause puts the finish timestamp before the end-of-region
-barrier. The join still completes every acceleration before the next Verlet
-phase reads it. A finish offset includes dispatch and any descheduling after
-the origin. Subtracting the earliest from the latest offset gives one
-\emph{arrival spread} per evaluation. Actual barrier entry and exit times
-would be needed to measure time spent inside the barrier.
+\subtopic{What the curve leaves open}
+The curve describes total simulation time. It cannot isolate how much time
+workers spend computing, waiting, or being descheduled. The next two
+measurements locate the active code and test whether workers with equal
+target counts finish together. Full timings and IQRs for both sizes are in
+the \dataref{results/baseline/summary.csv}{baseline table}.
 
-\textbf{Workload and checks.} We reused the Release preset, seed 20261117,
-$G=1$, $\epsilon=0.05$, $\Delta t=0.0005$ and 12 steps. After one instrumented
-warm-up per team, six repetitions alternated between 4 then 12 threads and
-12 then 4. Each run restarted from the same state. Index 0 labels the initial
-force and indices 1--12 follow the position updates. The 1,248 worker records
-cover 156 evaluations. The target counts sum to 3,072 each time. Every
-instrumented final position and velocity passed the existing tolerance check
-against the sequential solver. CSV writes took place after the simulation.
+\topic{Where the workers finish}
+The sampling workload ran 60 fresh simulations with 3,072 bodies, 12 steps
+and four static workers. This means 780 force evaluations. Of 4,916 samples
+mapped to the executable, 4,914 (99.96\%) included the outlined OpenMP
+target loop in the resolved call chain. The complete capture contained
+10,471 mapped hits, including 5,552 in \texttt{ntdll.dll}. The DLL samples
+alone cannot identify a barrier wait.
 
-\textbf{Reproduction.} From the repository root in an MSYS2 UCRT64 shell,
-use a Windows Python with Matplotlib. Run the campaign command to collect
-fresh data into an empty directory. The analysis command regenerates both
-PNG and vector PDF figures from the archived CSVs.
-\begin{verbatim}
-py=/c/Users/loicp/anaconda3/python.exe
-"$py" benchmarks/run_campaign.py --arrivals --sizes 3072 \
-  --threads 4 12 --steps 12 --seed 20261117 --repetitions 6 \
-  --output build/repeat-arrivals
-"$py" benchmarks/analyze.py results/baseline/raw.csv \
-  --arrivals results/arrivals/raw.csv
-\end{verbatim}
-Use \path{build/repeat-arrivals/raw.csv} as the second input to analyze a
-fresh run. Compiler commands and measured source fingerprints are archived
-in \path{results/arrivals/metadata.json}.
-
-\clearpage
-\section{Observed arrival spread}
-Table~\ref{tab:arrivals} describes all 13 evaluations of all six repetitions
-for each team. Each evaluation contributes one observation, regardless of
-the team size. Quartiles use inclusive linear interpolation. Figure~\ref{fig:arrivals}
-uses the same repetition and evaluation for both teams, chosen before the run.
-
-\begin{table}[ht]
-\centering
-\small
-\begin{tabular}{rrrrrrr}
-\toprule
-Threads & Evaluations & Minimum & $Q_1$ & Median & $Q_3$ & Maximum \\
-\midrule
-4  & 78 & 1.43 & 8.47 & 12.09 & 14.42 & 26.98 \\
-12 & 78 & 5.03 & 6.72 &  7.85 &  8.82 & 14.28 \\
-\bottomrule
-\end{tabular}
-\caption{Arrival spread in milliseconds, measured across one force evaluation.}
-\label{tab:arrivals}
-\end{table}
-
-\begin{figure}[ht]
-\centering
+Two Windows snapshots of that process spanned 3.432 seconds of wall time;
+four active threads accumulated 2.45--2.69 CPU seconds each. The 60 batch
+numbers and hashes have no boundary timestamps. The CPU window therefore
+cannot be assigned to particular simulations or used to time the 60 batches.
+\begin{figure}[H]\centering
 \includegraphics[width=\linewidth]{results/arrivals/thread-finishes.pdf}
-\caption{When OpenMP threads finish their work. Each point marks the end of
-one worker's assigned targets before the barrier, in repetition 3, evaluation
-6. Both panels use milliseconds from the common origin of their respective
-evaluation. Shading spans the earliest and latest finish.}
-\label{fig:arrivals}
+\caption{Static schedule, repetition 3, evaluation 6. Each point is one
+thread's finish before the barrier, on the same time scale for both panels.}
 \end{figure}
+In this evaluation, equal target counts still gave a 13.90\,ms arrival
+spread at four threads (768 targets each) and 8.83\,ms at twelve (256
+each). Across $6\times13$ evaluations the median spreads were 12.09 and
+7.85\,ms. Each worker timestamps its loop exit once using
+\texttt{steady\_clock} and \texttt{omp for nowait}. The region join still
+protects the subsequent Verlet phase. CSV writing follows the simulation.
 
-In the selected evaluation, four threads finished between 23.62 and
-37.52\,ms. Twelve threads finished between 12.25 and 21.08\,ms. Across all
-evaluations the median spread was smaller with twelve workers, although
-their individual assignments were equal in size within both teams.
+The earliest-to-latest finish includes differences in start time, execution
+rate and OS scheduling. It motivates redistributing remaining targets.
+Only uninstrumented end-to-end timing can establish how much time that saves.
 
-The offsets establish that completion times differed even with balanced
-target counts. They combine team dispatch, scheduling delays and execution
-rate. OpenMP thread IDs identify members of an evaluation's team. The trace
-does not establish which physical core ran a worker, why it finished at
-that time, or how much a change would improve the full simulation.
+\topic{Testing dynamic work distribution}
+The baseline commits each worker to a fixed range. With
+\texttt{schedule(dynamic,chunk)}, a worker that finishes one group can claim
+another until no targets remain. This may let faster or earlier-running
+workers absorb more work. Smaller groups give the runtime more chances to
+redistribute targets and require more acquisitions.
 
+At $N=3{,}072$, chunks of 16 give 192 groups per force evaluation; chunks
+of 64 give 48. The change is confined to the target loop. A target still
+uses the shared direct gravity kernel, in the original source order. Both
+schedules use the same force-to-Verlet synchronization and the same compiler
+flags. The separate diagnostic mirrors the selected schedule with
+\texttt{nowait} and records one count and timestamp per worker.
+
+\subtopic{What actually moved between workers}
+\begin{table}[H]\centering\small\renewcommand{\arraystretch}{1.13}
+\input{results/optimization/trace-table.tex}
+\caption{New, separately instrumented runs at 3,072 bodies. Each timing
+statistic summarizes 78 evaluation spreads. Target ranges span all workers
+and evaluations of the configuration.}
+\end{table}
+At twelve threads the median spread fell from 6.21\,ms with static ownership
+to 0.81\,ms with groups of 16. Some evaluations included a worker that
+received no dynamic chunk. Under the static schedule every worker processed
+256 targets. For all three schedules the counts summed to 3,072 in each
+evaluation, and all 13 evaluations occurred in each repetition.
+
+\subtopic{Decision rule}
+The primary case was 3,072 bodies on 12 threads. A repeatable gain required
+a lower median and at least five paired round wins out of six in \emph{each}
+timing pass. Smaller arrival spreads would support the proposed mechanism,
+but could coexist with higher total time if acquiring work adds enough cost.
+
+\topic{Effect on total simulation time}
+\begin{figure}[H]\centering
+\includegraphics[width=\linewidth]{results/optimization/schedule-comparison.pdf}
+\caption{Ratio of pooled medians at the same $N$ and $p$ over twelve runs
+per solver. Above one, the dynamic schedule completed the simulation faster.}
+\end{figure}
+\begin{table}[H]\centering\small\renewcommand{\arraystretch}{1.10}
+\input{results/optimization/primary-timings.tex}
+\caption{Matched 3,072-body case. All four medians and the sequential
+denominator come from the same two unprofiled passes.}
+\end{table}
+At 12 threads, dynamic 16 reduced median time by \textbf{14.82\,ms}
+(\textbf{10.2\%}) relative to static, with $3.91\times$ speedup over
+sequential. In pass A the static and dynamic-16 medians were 140.99 and
+129.08\,ms ($1.092\times$); in B they were 198.80 and 168.95\,ms
+($1.177\times$). Dynamic 16 won five of six paired rounds in each pass.
+
+Dynamic 64 won four rounds in A and three in B. Its median was lower
+than static within each pass, yet higher when all twelve times were pooled
+(151.20 versus 145.18\,ms). A median of pooled observations need not
+preserve the ordering of two separate medians. Pass B had much greater
+dispersion: its static IQR was 195.41\,ms versus 16.82\,ms in A. The
+raw rounds therefore matter to the interpretation. At 1,536 bodies and
+12 threads, the pooled ratios were 1.185 for dynamic 16 and 0.974 for
+dynamic 64.
+
+\topic{Conclusions and reproducibility}
+\subtopic{What did parallelization improve?}
+Independent target sums reduced the time spent advancing the complete
+system. The original 3,072-body baseline reached $3.54\times$ speedup at
+12 threads while preserving the sequential positions and velocities within
+the predefined tolerance. One writer per target made this possible without
+an inter-thread floating-point reduction.
+
+\subtopic{What did the extra optimization change?}
+Reassigning 16-target groups reduced the primary case's pooled median
+by 10.2\% and met the repeatability rule in both passes. Independently
+measured arrival spreads also shrank. Groups of 64 narrowed the spread
+but missed the timing criterion. These observations support selecting
+dynamic 16 for the tested workload. They give no direct estimate of a
+particular core's speed or the time spent inside the OpenMP barrier.
+
+\subtopic{Under what conditions should this result be used?}
+The experiments used two fixed, deterministic problem sizes, 12 short
+steps, one hybrid laptop CPU and the Windows Balanced plan. Placement,
+background load, frequency and temperature were uncontrolled. The two
+passes show substantial variation in absolute time. Other machines, team
+sizes or assigned input ranges can change the ranking. The small physical
+checks validate the implementation; long-term energy drift and convergence
+were outside this experiment.
+
+\subtopic{Reproduce the evidence}
+From the \href{\repourl}{GitHub repository} or the submission archive, build
+and test the UCRT64 Debug and Release presets. The
+\dataref{README.md}{README} contains the commands to regenerate the inputs,
+collect timings, run the independent diagnostics and plot the archived CSVs.
+The original \dataref{results/profile/capture.json}{sampling capture}
+and \dataref{results/profile/symbols.csv}{address-to-function table}
+support the choice of the target loop. The new
+\dataref{results/optimization/summary.csv}{per-pass and pooled results}
+include every size, schedule and team, together with IQR, speedup,
+efficiency, matched static ratio and paired wins.
+
+Confirm the individual parameter tuple on page~2 before submission. If it
+changes, regenerate the inputs and rerun validation, baseline timings and
+profile, arrival diagnostics and both scheduling passes. Rebuild the plots
+and PDF from the resulting data.
 \end{document}

@@ -52,6 +52,9 @@ if(BUILD_TESTING)
     add_test(NAME benchmark_equivalence COMMAND nbody_benchmark campaign 17 3 42 2 - 1 2)
     add_test(NAME benchmark_zero_steps COMMAND nbody_benchmark campaign 5 0 42 1 - 2)
     add_test(NAME benchmark_arrivals COMMAND nbody_benchmark arrivals 7 2 42 2 2 4)
+    add_test(NAME schedule_comparison COMMAND nbody_benchmark compare 131 3 42 2 - 1 2 4)
+    add_test(NAME schedule_arrivals COMMAND nbody_benchmark schedule-arrivals 131 3 42 2 2 4)
+    add_test(NAME demo_dynamic COMMAND nbody_demo --solver dynamic16 --threads 4 --diagnostics)
 
     add_test(
         NAME demo_sequential

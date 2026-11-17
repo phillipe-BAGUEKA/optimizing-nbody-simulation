@@ -147,8 +147,24 @@ struct Configuration
     int observed{};
 };
 
+std::vector<Configuration> parallel_configurations(const std::vector<int>& teams, bool compare_schedules)
+{
+    std::vector<Configuration> configurations;
+    for (int threads : teams)
+    {
+        configurations.push_back({nbody::AccelerationSolver::OpenMP, threads});
+        if (compare_schedules)
+        {
+            configurations.push_back({nbody::AccelerationSolver::Dynamic16, threads});
+            configurations.push_back({nbody::AccelerationSolver::Dynamic64, threads});
+        }
+    }
+    return configurations;
+}
+
 void campaign(const std::vector<nbody::Body>& initial, std::size_t steps, std::uint64_t seed,
-              int repetitions, const std::string& state_path, std::vector<Configuration>& configurations)
+              int repetitions, const std::string& state_path, std::vector<Configuration>& configurations,
+              bool compare_schedules)
 {
     auto reference = initial;
     nbody::simulate_velocity_verlet(reference, gravity, dt, steps, nbody::AccelerationSolver::Sequential);
@@ -172,7 +188,11 @@ void campaign(const std::vector<nbody::Body>& initial, std::size_t steps, std::u
     {
         for (std::size_t order = 0; order < configurations.size(); ++order)
         {
-            const std::size_t index = (static_cast<std::size_t>(round) + order) % configurations.size();
+            const auto count = configurations.size();
+            // Vary the starting configuration and alternate direction in the matched experiment.
+            const auto start = static_cast<std::size_t>(round) * (compare_schedules ? 5U : 1U);
+            const auto offset = compare_schedules && round % 2 == 1 ? count - order : order;
+            const auto index = (start + offset) % count;
             const auto& config = configurations[index];
             omp_set_num_threads(config.requested);
             auto state = initial;
@@ -180,7 +200,7 @@ void campaign(const std::vector<nbody::Body>& initial, std::size_t steps, std::u
             compare_final_state(state, reference);
             std::cout << initial.size() << ',' << steps << ',' << seed << ',' << gravity.gravitational_constant
                       << ',' << gravity.softening << ',' << dt << ',' << round + 1 << ',' << order + 1 << ','
-                      << (config.solver == nbody::AccelerationSolver::Sequential ? "sequential" : "openmp")
+                      << nbody::solver_name(config.solver)
                       << ',' << config.requested << ',' << config.observed << ',' << seconds << ','
                       << std::hex << initial_hash << ',' << state_fingerprint(state) << std::dec << '\n';
             if (state_path != "-" && round == repetitions - 1 && order == configurations.size() - 1)
@@ -205,20 +225,23 @@ void profile(const std::vector<nbody::Body>& initial, std::size_t steps, int rep
 }
 
 void arrival_campaign(const std::vector<nbody::Body>& initial, std::size_t steps,
-                      std::uint64_t seed, int repeats, const std::vector<int>& teams)
+                      std::uint64_t seed, int repeats, const std::vector<Configuration>& configurations,
+                      bool include_solver)
 {
     auto reference = initial;
     nbody::simulate_velocity_verlet(reference, gravity, dt, steps, nbody::AccelerationSolver::Sequential);
     const auto initial_hash = state_fingerprint(initial);
-    std::cout << "n,k,seed,g,epsilon,dt,round,order,requested_threads,observed_threads,"
+    std::cout << "n,k,seed,g,epsilon,dt,round,order," << (include_solver ? "solver," : "")
+              << "requested_threads,observed_threads,"
                  "evaluation,thread_id,targets,finish_ns,initial_hash,final_hash\n";
 
     // Round zero warms up each instrumented team. Subsequent rounds rotate the order.
-    const auto run = [&](int threads, int round, std::size_t order)
+    const auto run = [&](const Configuration& config, int round, std::size_t order)
     {
+        const int threads = config.requested;
         omp_set_num_threads(threads);
         auto state = initial;
-        const auto trace = nbody::trace_openmp_arrivals(state, gravity, dt, steps);
+        const auto trace = nbody::trace_openmp_arrivals(state, gravity, dt, steps, config.solver);
         compare_final_state(state, reference);
         if (trace.empty() || trace.size() - 1 != steps)
         {
@@ -245,23 +268,28 @@ void arrival_campaign(const std::vector<nbody::Body>& initial, std::size_t steps
             {
                 std::cout << initial.size() << ',' << steps << ',' << seed << ','
                           << gravity.gravitational_constant << ',' << gravity.softening << ','
-                          << dt << ',' << round << ',' << order << ',' << threads << ','
+                          << dt << ',' << round << ',' << order << ',';
+                if (include_solver)
+                {
+                    std::cout << nbody::solver_name(config.solver) << ',';
+                }
+                std::cout << threads << ','
                           << arrivals.size() << ',' << evaluation << ',' << id << ','
                           << arrivals[id].targets << ',' << arrivals[id].finish_offset.count() << ','
                           << std::hex << initial_hash << ',' << final_hash << std::dec << '\n';
             }
         }
     };
-    for (int threads : teams)
+    for (const auto& config : configurations)
     {
-        run(threads, 0, 0);
+        run(config, 0, 0);
     }
     for (int round = 0; round < repeats; ++round)
     {
-        for (std::size_t order = 0; order < teams.size(); ++order)
+        for (std::size_t order = 0; order < configurations.size(); ++order)
         {
-            const int threads = teams[(static_cast<std::size_t>(round) + order) % teams.size()];
-            run(threads, round + 1, order + 1);
+            const auto index = (static_cast<std::size_t>(round) + order) % configurations.size();
+            run(configurations[index], round + 1, order + 1);
         }
     }
 }
@@ -275,9 +303,9 @@ int main(int argc, char* argv[])
         if (argc < 7)
         {
             throw std::invalid_argument(
-                "Usage: nbody_benchmark campaign N K SEED R FINAL.csv|- [THREADS ...]\n"
+                "Usage: nbody_benchmark campaign|compare N K SEED R FINAL.csv|- [THREADS ...]\n"
                 "       nbody_benchmark profile N K SEED R THREADS\n"
-                "       nbody_benchmark arrivals N K SEED R THREADS [THREADS ...]"
+                "       nbody_benchmark arrivals|schedule-arrivals N K SEED R THREADS [THREADS ...]"
             );
         }
         const std::string_view mode = argv[1];
@@ -291,22 +319,22 @@ int main(int argc, char* argv[])
         }
         omp_set_dynamic(0);
         std::cout << std::setprecision(17);
-        if (mode == "campaign")
+        if (mode == "campaign" || mode == "compare")
         {
-            std::vector<Configuration> configurations{{nbody::AccelerationSolver::Sequential, 1}};
-            for (int threads : read_teams(7, argc, argv))
-            {
-                configurations.push_back({nbody::AccelerationSolver::OpenMP, threads});
-            }
-            campaign(make_initial_state(count, seed), steps, seed, repeats, argv[6], configurations);
+            auto configurations = parallel_configurations(read_teams(7, argc, argv), mode == "compare");
+            configurations.insert(configurations.begin(), {nbody::AccelerationSolver::Sequential, 1});
+            campaign(make_initial_state(count, seed), steps, seed, repeats, argv[6], configurations,
+                     mode == "compare");
         }
         else if (mode == "profile" && argc == 7)
         {
             profile(make_initial_state(count, seed), steps, repeats, read_threads(argv[6]));
         }
-        else if (mode == "arrivals")
+        else if (mode == "arrivals" || mode == "schedule-arrivals")
         {
-            arrival_campaign(make_initial_state(count, seed), steps, seed, repeats, read_teams(6, argc, argv));
+            const bool compare = mode == "schedule-arrivals";
+            const auto configs = parallel_configurations(read_teams(6, argc, argv), compare);
+            arrival_campaign(make_initial_state(count, seed), steps, seed, repeats, configs, compare);
         }
         else
         {

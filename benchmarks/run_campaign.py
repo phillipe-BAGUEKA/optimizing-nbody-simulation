@@ -26,6 +26,16 @@ def command_text(command: list[str]) -> str:
     return subprocess.check_output(command, cwd=ROOT, text=True).rstrip()
 
 
+def git_provenance() -> tuple[str | None, list[str]]:
+    """An extracted submission carries source hashes but has no checkout of its own."""
+    if not (ROOT / ".git").exists():
+        return None, []
+    return (
+        command_text(["git", "rev-parse", "HEAD"]),
+        command_text(["git", "status", "--porcelain", "-uall"]).splitlines(),
+    )
+
+
 def read_cache(path: Path) -> dict[str, str]:
     cache = {}
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -45,8 +55,10 @@ def main() -> None:
     parser.add_argument("--build-dir", type=Path, default=ROOT / "build/ucrt64-release")
     parser.add_argument("--output", type=Path, required=True, help="New output directory")
     options = parser.add_mutually_exclusive_group()
-    options.add_argument("--no-states", action="store_true", help="Omit final states for a pilot")
+    parser.add_argument("--no-states", action="store_true", help="Omit final-state CSVs")
     options.add_argument("--arrivals", action="store_true", help="Record pre-barrier thread finishes")
+    options.add_argument("--compare", action="store_true", help="Time static, dynamic16 and dynamic64")
+    options.add_argument("--schedule-arrivals", action="store_true", help="Trace all three schedules")
     args = parser.parse_args()
     if len(set(args.sizes)) != len(args.sizes) or any(n < 1 for n in args.sizes):
         parser.error("Body counts must be distinct and positive.")
@@ -78,11 +90,19 @@ def main() -> None:
     ]
     power_scheme = re.search(r"[\da-fA-F]{8}-(?:[\da-fA-F]{4}-){3}[\da-fA-F]{12}",
                              command_text(["powercfg", "/getactivescheme"]))
-    mode = "arrivals" if args.arrivals else "campaign"
+    mode = "campaign"
+    if args.compare:
+        mode = "compare"
+    elif args.schedule_arrivals:
+        mode = "schedule-arrivals"
+    elif args.arrivals:
+        mode = "arrivals"
+    schedules = 3 if args.compare or args.schedule_arrivals else 1
+    head, status = git_provenance()
     metadata = {
         "mode": mode,
-        "head": command_text(["git", "rev-parse", "HEAD"]),
-        "git_status_before": command_text(["git", "status", "--porcelain", "-uall"]).splitlines(),
+        "head": head,
+        "git_status_before": status,
         "source_sha256": {p.relative_to(ROOT).as_posix(): sha256(p) for p in sources},
         "binary_sha256": sha256(executable),
         "build_type": cache["CMAKE_BUILD_TYPE"],
@@ -115,12 +135,12 @@ def main() -> None:
                 str(executable), mode, str(count), str(args.steps), str(args.seed),
                 str(args.repetitions),
             ]
-            if args.arrivals:
-                rows_per_round = (args.steps + 1) * sum(args.threads)
+            if args.arrivals or args.schedule_arrivals:
+                rows_per_round = schedules * (args.steps + 1) * sum(args.threads)
             else:
                 state_path = "-" if args.no_states else str(output / f"final-{count}.csv")
                 command.append(state_path)
-                rows_per_round = 1 + len(args.threads)
+                rows_per_round = 1 + schedules * len(args.threads)
             command.extend(map(str, args.threads))
             result = subprocess.run(
                 command, env=environment, stdout=subprocess.PIPE, text=True, check=True

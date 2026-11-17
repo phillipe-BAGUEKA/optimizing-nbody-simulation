@@ -4,6 +4,7 @@
 #include "nbody/gravity.hpp"
 
 #include <cstddef>
+#include <string_view>
 #include <vector>
 
 namespace nbody
@@ -12,8 +13,12 @@ namespace nbody
 enum class AccelerationSolver
 {
     Sequential,
-    OpenMP
+    OpenMP,
+    Dynamic16,
+    Dynamic64
 };
+
+std::string_view solver_name(AccelerationSolver solver);
 
 // Indexed by evaluation (0 is the initial force) and then by OpenMP thread ID.
 using ArrivalTrace = std::vector<std::vector<ThreadArrival>>;
@@ -21,7 +26,7 @@ using ArrivalTrace = std::vector<std::vector<ThreadArrival>>;
 // Evolve the same state, recording one pre-barrier finish per team member.
 ArrivalTrace trace_openmp_arrivals(
     std::vector<Body>& bodies, const GravityParameters& parameters,
-    double time_step, std::size_t steps
+    double time_step, std::size_t steps, AccelerationSolver solver = AccelerationSolver::OpenMP
 );
 
 // In-place Velocity Verlet: steps + 1 acceleration evaluations, including steps == 0.

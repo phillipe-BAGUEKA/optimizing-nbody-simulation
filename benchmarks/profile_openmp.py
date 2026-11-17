@@ -14,6 +14,8 @@ import time
 
 import psutil
 
+from run_campaign import git_provenance
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -141,10 +143,7 @@ def main() -> None:
 
     source_root = ROOT.as_posix()
     sources = source_manifest()
-    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True)
-    status = subprocess.check_output(
-        ["git", "status", "--porcelain", "-uall"], cwd=ROOT, text=True
-    )
+    head, status = git_provenance()
     binary_hash = sha256(executable)
     scratch = Path(tempfile.mkdtemp(prefix="profile-", dir=build.parent))
     environment = os.environ.copy()
@@ -190,8 +189,8 @@ def main() -> None:
     shutil.copyfile(batches_path, output / "batches.txt")
     commands = json.loads((build / "compile_commands.json").read_text(encoding="utf-8"))
     metadata = {
-        "head": head.strip(),
-        "git_status_before": status.splitlines(),
+        "head": head,
+        "git_status_before": status,
         "source_root_at_build": source_root,
         "source_sha256": sources,
         "workload": workload,

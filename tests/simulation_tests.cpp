@@ -296,18 +296,18 @@ void check_parallel_equivalence()
     }
 }
 
-void check_arrival_trace()
+void check_arrival_trace(nbody::AccelerationSolver solver)
 {
     omp_set_num_threads(4);
     std::vector<nbody::Body> empty;
     const nbody::GravityParameters parameters{1.0, 4.0};
-    const auto empty_trace = nbody::trace_openmp_arrivals(empty, parameters, 0.5, 0);
+    const auto empty_trace = nbody::trace_openmp_arrivals(empty, parameters, 0.5, 0, solver);
     expect(empty_trace.size() == 1 && empty_trace.front().empty(), "empty system launches no workers");
 
     auto bodies = nbody::make_two_body_example();
     auto reference = bodies;
     nbody::simulate_velocity_verlet(reference, parameters, 0.5, 1, nbody::AccelerationSolver::Sequential);
-    const auto trace = nbody::trace_openmp_arrivals(bodies, parameters, 0.5, 1);
+    const auto trace = nbody::trace_openmp_arrivals(bodies, parameters, 0.5, 1, solver);
     expect(trace.size() == 2, "trace contains initial and updated force");
     for (const auto& evaluation : trace)
     {
@@ -319,12 +319,43 @@ void check_arrival_trace()
             expect(arrival.finish_offset.count() >= 0, "finish follows the evaluation origin");
         }
         std::sort(counts.begin(), counts.end());
-        expect(counts == std::vector<std::size_t>{0, 0, 1, 1}, "idle workers also record a finish");
+        const auto expected = solver == nbody::AccelerationSolver::OpenMP
+            ? std::vector<std::size_t>{0, 0, 1, 1} : std::vector<std::size_t>{0, 0, 0, 2};
+        expect(counts == expected, "idle workers and a last short chunk");
     }
     for (std::size_t i = 0; i < bodies.size(); ++i)
     {
         expect_vector(bodies[i].position, reference[i].position, "traced position");
         expect_vector(bodies[i].velocity, reference[i].velocity, "traced velocity");
+    }
+}
+
+void check_dynamic_chunks(nbody::AccelerationSolver solver, std::size_t chunk)
+{
+    omp_set_num_threads(4);
+    std::vector<nbody::Body> bodies(131);
+    for (std::size_t i = 0; i < bodies.size(); ++i)
+    {
+        bodies[i].position.x = 0.01 * static_cast<double>(i);
+    }
+    const auto trace = nbody::trace_openmp_arrivals(bodies, {1.0, 0.05}, 0.0005, 2, solver);
+    expect(trace.size() == 3, "one initial force plus two updated forces");
+    for (const auto& evaluation : trace)
+    {
+        expect(evaluation.size() == 4, "four dynamic workers");
+        std::size_t total = 0;
+        std::size_t short_chunks = 0;
+        for (const auto& worker : evaluation)
+        {
+            total += worker.targets;
+            const auto remainder = worker.targets % chunk;
+            if (remainder != 0)
+            {
+                ++short_chunks;
+                expect(remainder == bodies.size() % chunk, "only the final chunk can be short");
+            }
+        }
+        expect(total == bodies.size() && short_chunks == 1, "all full chunks and one tail assigned");
     }
 }
 
@@ -343,7 +374,13 @@ int main()
             check_validation(solver);
         }
         check_parallel_equivalence();
-        check_arrival_trace();
+        check_dynamic_chunks(nbody::AccelerationSolver::Dynamic16, 16);
+        check_dynamic_chunks(nbody::AccelerationSolver::Dynamic64, 64);
+        for (const auto solver : {nbody::AccelerationSolver::OpenMP, nbody::AccelerationSolver::Dynamic16,
+                                  nbody::AccelerationSolver::Dynamic64})
+        {
+            check_arrival_trace(solver);
+        }
     }
     catch (const std::exception& error)
     {

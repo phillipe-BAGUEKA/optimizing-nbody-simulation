@@ -94,4 +94,4 @@ The six CTest entries (`openmp_smoke_check`, `vec3_tests`, `simulation_tests`, `
 
 ## Pending work
 
-Analyze and explain the code with the learner, define the definitive input data and study convergence and longer-term invariants. A separate campaign now covers the provisional generator, timings and the baseline profile. Optimization, notebooks and visualization remain future work.
+The benchmark checks both dynamic schedules against the same sequential reference and tolerance used for the static baseline. Confirm the individual input tuple and study convergence and longer-term invariants separately. [Scheduling comparison and reproduction](../README.md#does-dynamic-scheduling-reduce-total-time)

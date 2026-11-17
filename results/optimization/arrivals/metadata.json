@@ -1,0 +1,58 @@
+{
+  "mode": "schedule-arrivals",
+  "head": "f76c985adb01d86570fac39313e973f3462ee9c8",
+  "git_status_before": [
+    " M CMakeLists.txt",
+    " M benchmarks/analyze.py",
+    " M benchmarks/benchmark.cpp",
+    " M benchmarks/profile_openmp.py",
+    " M benchmarks/run_campaign.py",
+    " M include/nbody/simulation.hpp",
+    " M src/gravity.cpp",
+    " M src/gravity_kernel.hpp",
+    " M src/main.cpp",
+    " M src/simulation.cpp",
+    " M tests/cli_validation.cmake",
+    " M tests/simulation_tests.cpp",
+    "?? results/optimization/pass-a/metadata.json",
+    "?? results/optimization/pass-a/raw.csv",
+    "?? results/optimization/pass-b/metadata.json",
+    "?? results/optimization/pass-b/raw.csv"
+  ],
+  "source_sha256": {
+    "CMakeLists.txt": "2635831ad4182efd2fb85c4c2d548dfdacb4fcad7ecead7734263af80d66b915",
+    "CMakePresets.json": "3228d8ef93df730cba8d6d271b27c6dd1dc9ad3a5f28ef6dbc257454941b1b1f",
+    "src/gravity.cpp": "ae2a2cd933bbba0b51de423c82fef781b4402934c796b853c8efc43e8b9302b5",
+    "src/gravity_kernel.hpp": "ec5825c8863ad05fe818927b4ea1113f481c12e4598103df303f8cfaab621eec",
+    "src/simulation.cpp": "a8cd0586b18424d0f97ddf508adb3da8808a4853400f74aa653e02cc09098d69",
+    "benchmarks/benchmark.cpp": "903a889a36597cd74c143c99d26fb799bd348e098ce5e8ef0ce0dc20e9c10ced",
+    "benchmarks/run_campaign.py": "e57c63d29bf33b6be6aaecbfb497e03702b22e3dcc47de705486786ca48007df",
+    "include/nbody/body.hpp": "1ebb68192185a823d11b85b0a51194b6d1371d64c96c262d1f0b41a3e532b529",
+    "include/nbody/examples.hpp": "f9b1b64142802757375abaa0c6743fe9a32dfc4042c3517de53ed217de68ac15",
+    "include/nbody/gravity.hpp": "eb70a284d5bbed41f7f43459fc0b113db1ca24e491e3017d52ea2f95c5cb691a",
+    "include/nbody/simulation.hpp": "5118ce22575ef43699244ab1b03f9ff6f372350759b43031334b323ab895b842",
+    "include/nbody/vec3.hpp": "56036793c11190fd62237e335f4dda4fbacc623c2b66ab01a2300e65a0f26c6a"
+  },
+  "binary_sha256": "4492814c003b99301edc9b488fc82bab9fb0822f4172160d8c537cb3c7c5049b",
+  "build_type": "Release",
+  "compiler": "g++.exe (Rev4, Built by MSYS2 project) 16.2.0",
+  "compile_commands": [
+    "C:\\msys64\\ucrt64\\bin\\g++.exe -IC:/Users/loicp/Documents/I3/02-C++/000-PROJECT/n_body/include -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -fopenmp -o CMakeFiles\\nbody.dir\\src\\gravity.cpp.obj -c C:\\Users\\loicp\\Documents\\I3\\02-C++\\000-PROJECT\\n_body\\src\\gravity.cpp",
+    "C:\\msys64\\ucrt64\\bin\\g++.exe -IC:/Users/loicp/Documents/I3/02-C++/000-PROJECT/n_body/include -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -fopenmp -o CMakeFiles\\nbody.dir\\src\\simulation.cpp.obj -c C:\\Users\\loicp\\Documents\\I3\\02-C++\\000-PROJECT\\n_body\\src\\simulation.cpp",
+    "C:\\msys64\\ucrt64\\bin\\g++.exe -IC:/Users/loicp/Documents/I3/02-C++/000-PROJECT/n_body/include -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -fopenmp -o CMakeFiles\\nbody_benchmark.dir\\benchmarks\\benchmark.cpp.obj -c C:\\Users\\loicp\\Documents\\I3\\02-C++\\000-PROJECT\\n_body\\benchmarks\\benchmark.cpp"
+  ],
+  "windows_version": "10.0.26300",
+  "logical_processors_reported_by_os": 12,
+  "power_scheme_guid": "381b4222-f694-41f0-9685-ff5bb260df2e",
+  "openmp_environment": {},
+  "steps": 12,
+  "seed": 20261117,
+  "sizes": [
+    3072
+  ],
+  "requested_openmp_teams": [
+    4,
+    12
+  ],
+  "measured_rounds": 6
+}

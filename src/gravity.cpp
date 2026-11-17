@@ -130,7 +130,8 @@ void detail::fill_accelerations_openmp(
     const std::vector<Body>& bodies,
     const GravityParameters& parameters,
     std::vector<Vec3>& accelerations,
-    int* observed_thread_count
+    int* observed_thread_count,
+    int dynamic_chunk
 )
 {
     if (observed_thread_count != nullptr)
@@ -143,9 +144,7 @@ void detail::fill_accelerations_openmp(
         return;
     }
 
-#pragma omp parallel for default(none) schedule(static) \
-    shared(bodies, parameters, accelerations, observed_thread_count) firstprivate(body_count)
-    for (std::size_t target_index = 0; target_index < body_count; ++target_index)
+    const auto evaluate = [&](std::size_t target_index)
     {
         if (observed_thread_count != nullptr && target_index == 0)
         {
@@ -153,12 +152,29 @@ void detail::fill_accelerations_openmp(
             *observed_thread_count = omp_get_num_threads();
         }
         accelerations[target_index] = acceleration_for_target(target_index, bodies, parameters);
+    };
+    if (dynamic_chunk > 0)
+    {
+#pragma omp parallel for default(none) schedule(dynamic, dynamic_chunk) \
+    shared(evaluate) firstprivate(body_count, dynamic_chunk)
+        for (std::size_t index = 0; index < body_count; ++index)
+        {
+            evaluate(index);
+        }
+    }
+    else
+    {
+#pragma omp parallel for default(none) schedule(static) shared(evaluate) firstprivate(body_count)
+        for (std::size_t index = 0; index < body_count; ++index)
+        {
+            evaluate(index);
+        }
     }
 }
 
 std::vector<ThreadArrival> detail::trace_accelerations_openmp(
     const std::vector<Body>& bodies, const GravityParameters& parameters,
-    std::vector<Vec3>& accelerations
+    std::vector<Vec3>& accelerations, int dynamic_chunk
 )
 {
     const std::size_t body_count = bodies.size();
@@ -172,15 +188,30 @@ std::vector<ThreadArrival> detail::trace_accelerations_openmp(
     const auto origin = Clock::now();
 
 #pragma omp parallel default(none) shared(bodies, parameters, accelerations, arrivals, actual_threads) \
-    firstprivate(body_count, origin)
+    firstprivate(body_count, origin, dynamic_chunk)
     {
         const int thread_id = omp_get_thread_num();
         std::size_t targets = 0;
-#pragma omp for schedule(static) nowait
-        for (std::size_t index = 0; index < body_count; ++index)
+        const auto evaluate = [&](std::size_t index)
         {
             accelerations[index] = acceleration_for_target(index, bodies, parameters);
             ++targets;
+        };
+        if (dynamic_chunk > 0)
+        {
+#pragma omp for schedule(dynamic, dynamic_chunk) nowait
+            for (std::size_t index = 0; index < body_count; ++index)
+            {
+                evaluate(index);
+            }
+        }
+        else
+        {
+#pragma omp for schedule(static) nowait
+            for (std::size_t index = 0; index < body_count; ++index)
+            {
+                evaluate(index);
+            }
         }
         // Each worker timestamps its own loop exit before the parallel region joins.
         const auto finished = Clock::now();

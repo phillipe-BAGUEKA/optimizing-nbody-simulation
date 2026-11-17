@@ -7,8 +7,32 @@
 
 namespace nbody
 {
+std::string_view solver_name(AccelerationSolver solver)
+{
+    switch (solver)
+    {
+    case AccelerationSolver::Sequential: return "sequential";
+    case AccelerationSolver::OpenMP: return "openmp";
+    case AccelerationSolver::Dynamic16: return "dynamic16";
+    case AccelerationSolver::Dynamic64: return "dynamic64";
+    }
+    throw std::invalid_argument("Unknown acceleration solver.");
+}
+
 namespace
 {
+
+int dynamic_chunk_size(AccelerationSolver solver)
+{
+    switch (solver)
+    {
+    case AccelerationSolver::Sequential:
+    case AccelerationSolver::OpenMP: return 0;
+    case AccelerationSolver::Dynamic16: return 16;
+    case AccelerationSolver::Dynamic64: return 64;
+    }
+    throw std::invalid_argument("Unknown acceleration solver.");
+}
 
 void run_velocity_verlet(
     std::vector<Body>& bodies,
@@ -31,10 +55,7 @@ void run_velocity_verlet(
     {
         throw std::invalid_argument("Time step squared is outside the supported numeric range.");
     }
-    if (solver != AccelerationSolver::Sequential && solver != AccelerationSolver::OpenMP)
-    {
-        throw std::invalid_argument("Unknown acceleration solver.");
-    }
+    const int dynamic_chunk = dynamic_chunk_size(solver);
 
     const auto evaluate_accelerations = [&](std::vector<Vec3>& output)
     {
@@ -52,11 +73,11 @@ void run_velocity_verlet(
         }
         else if (arrivals != nullptr)
         {
-            arrivals->push_back(detail::trace_accelerations_openmp(bodies, parameters, output));
+            arrivals->push_back(detail::trace_accelerations_openmp(bodies, parameters, output, dynamic_chunk));
         }
         else
         {
-            detail::fill_accelerations_openmp(bodies, parameters, output, observed_thread_count);
+            detail::fill_accelerations_openmp(bodies, parameters, output, observed_thread_count, dynamic_chunk);
         }
         if (elapsed_seconds == nullptr)
         {
@@ -126,11 +147,15 @@ double measure_velocity_verlet(
 
 ArrivalTrace trace_openmp_arrivals(
     std::vector<Body>& bodies, const GravityParameters& parameters,
-    double time_step, std::size_t steps
+    double time_step, std::size_t steps, AccelerationSolver solver
 )
 {
+    if (solver == AccelerationSolver::Sequential)
+    {
+        throw std::invalid_argument("A thread arrival trace requires an OpenMP solver.");
+    }
     ArrivalTrace arrivals;
-    run_velocity_verlet(bodies, parameters, time_step, steps, AccelerationSolver::OpenMP,
+    run_velocity_verlet(bodies, parameters, time_step, steps, solver,
                         nullptr, nullptr, &arrivals);
     return arrivals;
 }
