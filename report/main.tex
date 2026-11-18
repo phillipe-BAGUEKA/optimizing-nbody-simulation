@@ -1,61 +1,58 @@
-\documentclass[12pt,a4paper]{article}
+\documentclass[11pt,a4paper]{article}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{lmodern,microtype}
-\usepackage[a4paper,left=23mm,right=23mm,top=24mm,bottom=22mm,headheight=15pt]{geometry}
+\usepackage[a4paper,hmargin=28.5mm,top=24mm,bottom=23mm,headheight=14pt]{geometry}
 \usepackage{amsmath,amssymb,booktabs,array}
 \usepackage{graphicx,xcolor,tikz,caption,float,fancyhdr}
 \usetikzlibrary{arrows.meta,positioning,calc}
-\definecolor{accent}{HTML}{155B72}
-\definecolor{ink}{HTML}{1E2E36}
-\definecolor{wash}{HTML}{EDF4F6}
-\usepackage[colorlinks=true,urlcolor=accent,linkcolor=accent]{hyperref}
+\usepackage[hidelinks]{hyperref}
 \hypersetup{pdftitle={Implementation, Profiling, and Optimization of an N-Body Simulation},
   pdfauthor={Phillipe BAGUEKA},pdfsubject={Parallel Programming semester project}}
 \urlstyle{same}
 \newcommand{\repourl}{https://github.com/phillipe-BAGUEKA/optimizing-nbody-simulation}
 \newcommand{\dataref}[2]{\href{\repourl/blob/main/#1}{#2}}
-\captionsetup{font=small,labelfont={bf,color=accent},justification=raggedright,singlelinecheck=false}
+\captionsetup{font=small,labelfont=bf,justification=justified,singlelinecheck=false,skip=5pt}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\small\sffamily Parallel Programming}
-\fancyhead[R]{\small\sffamily Direct N-body simulation}
-\fancyfoot[L]{\small\sffamily Phillipe BAGUEKA}
-\fancyfoot[R]{\small\sffamily\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
-\setlength{\parindent}{0pt}
-\setlength{\parskip}{6pt}
+\fancyhead[L]{\small\itshape Parallel Programming}
+\fancyhead[R]{\small\itshape Direct N-body simulation}
+\fancyfoot[L]{\small Phillipe BAGUEKA}
+\fancyfoot[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0.25pt}
+\setlength{\parindent}{1.3em}
+\setlength{\parskip}{2pt}
 \setlength{\emergencystretch}{2em}
 \raggedbottom
-\newcommand{\topic}[1]{\clearpage{\color{accent}\sffamily\bfseries\fontsize{22}{26}\selectfont #1\par}\vspace{2mm}}
-\newcommand{\subtopic}[1]{\par\addvspace{3mm}{\large\sffamily\bfseries\color{ink}#1\par}\nobreak}
-\tikzset{box/.style={draw=accent,rounded corners=2pt,fill=wash,align=center,inner sep=6pt},
-  arrow/.style={-Latex,thick,draw=accent}}
+\newcommand{\topic}[1]{\clearpage\section*{#1}}
+\newcommand{\subtopic}[1]{\subsection*{#1}}
+\tikzset{box/.style={draw=black!65,fill=black!2,align=center,inner sep=6pt},
+  arrow/.style={-Latex,draw=black!80,semithick}}
 \begin{document}
 \thispagestyle{empty}
-{\sffamily\bfseries\Large Technical University of Sofia\par}
-{\sffamily\large Parallel Programming\par}
-\vspace{30mm}
-{\color{accent}\rule{22mm}{1.6pt}\par}
-\vspace{3mm}
-{\large\sffamily\bfseries\color{accent}SEMESTER PROJECT\par}
-\vspace{2mm}
-{\sffamily\bfseries\fontsize{23}{29}\selectfont
+\vspace*{17mm}
+\begingroup\centering
+{\large Technical University of Sofia\par}
+{Parallel Programming\par}
+\vspace{15mm}
+{\small SEMESTER PROJECT\par}
+\vspace{2.5mm}
+{\bfseries\fontsize{19}{23}\selectfont
 Implementation, Profiling, and Optimization\\
 of an N-Body Simulation\par}
-\vspace{9mm}
-{\sffamily\bfseries\fontsize{15}{20}\selectfont Phillipe BAGUEKA - ERASMUS STUDENT\par}
-\vspace{14mm}
-\begin{minipage}{0.86\textwidth}\large
+\vspace{3mm}
+{\large Phillipe BAGUEKA - ERASMUS STUDENT\par}
+\endgroup
+\vspace{10mm}
+\noindent
 This study follows a direct three-dimensional gravitational simulation from a
 C++20 sequential reference to an OpenMP implementation. Thread finish times
 motivate an experiment with dynamic work distribution. Two timing campaigns
 test whether smaller chunks reduce the time for a complete simulation.
-\end{minipage}
-\par\vspace{10mm}
-{\sffamily\href{\repourl}{GitHub repository\enspace optimizing-nbody-simulation}\par}
+\par\vspace{5mm}
+{\centering\href{\repourl}{GitHub repository\enspace optimizing-nbody-simulation}\par}
 \vfill
-{\large\sffamily Academic Year 2026--2027\par}
+{\centering Academic Year 2026--2027\par}
 
 \topic{Model and experimental inputs}
 How much faster can one CPU simulate the same system when several threads
@@ -344,6 +341,11 @@ passes show substantial variation in absolute time. Other machines, team
 sizes or assigned input ranges can change the ranking. The small physical
 checks validate the implementation; long-term energy drift and convergence
 were outside this experiment.
+
+\begin{figure}[H]\centering
+\includegraphics[width=\linewidth]{results/optimization/matched-rounds.pdf}
+\caption{Each marker is one unprofiled simulation. Both panels use the same time scale.}
+\end{figure}
 
 \subtopic{Reproduce the evidence}
 From the \href{\repourl}{GitHub repository} or the submission archive, build

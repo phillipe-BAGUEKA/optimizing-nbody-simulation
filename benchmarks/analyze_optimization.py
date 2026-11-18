@@ -154,6 +154,39 @@ def plot_comparison(output: Path, results: list[Result]) -> None:
     export_figure(figure, output, "schedule-comparison")
 
 
+def plot_matched_rounds(output: Path, passes: dict[str, list[Row]]) -> None:
+    """Show individual timings for the same primary case as the report table."""
+    first_pass = next(iter(passes.values()))
+    bodies = max(int(row["n"]) for row in first_pass)
+    threads = max(int(row["requested_threads"]) for row in first_pass if int(row["n"]) == bodies)
+    figure, panels = plt.subplots(1, len(passes), figsize=(7.2, 2.75), sharey=True, squeeze=False)
+    figure.subplots_adjust(left=0.095, right=0.99, bottom=0.30, top=0.76, wspace=0.12)
+    styles = [
+        ("openmp", -0.16, "^", "#454a50"),
+        ("dynamic16", 0.0, "o", "#14627d"),
+        ("dynamic64", 0.16, "s", "#ae4b19"),
+    ]
+    for panel, (name, rows) in zip(panels[0], passes.items()):
+        case = [row for row in rows if int(row["n"]) == bodies
+                and int(row["requested_threads"]) == threads and row["solver"] != "sequential"]
+        rounds = sorted({int(row["round"]) for row in case})
+        for solver, offset, marker, color in styles:
+            samples = [row for row in case if row["solver"] == solver]
+            panel.scatter([int(row["round"]) + offset for row in samples],
+                          [1000 * float(row["elapsed_s"]) for row in samples],
+                          s=22, marker=marker, color=color, label=LABELS[solver], zorder=3)
+        panel.set(xticks=rounds, xlim=(rounds[0] - 0.5, rounds[-1] + 0.5),
+                  xlabel="Measured round", title=name.replace("-", " ").title())
+        panel.grid(axis="y", alpha=0.23)
+        panel.spines[["top", "right"]].set_visible(False)
+    panels[0, 0].set_ylim(bottom=0)
+    panels[0, 0].set_ylabel("Elapsed time (ms)")
+    figure.suptitle(f"Matched simulation times at {bodies:,} bodies and {threads} threads", fontsize=13)
+    handles, labels = panels[0, 0].get_legend_handles_labels()
+    figure.legend(handles, labels, loc="lower center", ncols=3, frameon=False)
+    export_figure(figure, output, "matched-rounds")
+
+
 def write_report_tables(output: Path, results: list[Result], arrivals: list[Result]) -> None:
     """Export the primary timing case and the independent trace summary in display units."""
     n = max(row["n"] for row in results)
@@ -202,6 +235,7 @@ def main() -> None:
     pooled = []
     offset = 0
     protocols = []
+    passes = {}
     for name in ("pass-a", "pass-b"):
         metadata, rows = load_campaign(args.campaign / name)
         if metadata["mode"] != "compare":
@@ -209,6 +243,7 @@ def main() -> None:
         protocols.append((metadata["binary_sha256"], sorted(metadata["sizes"]),
                           sorted(metadata["requested_openmp_teams"]), metadata["measured_rounds"]))
         check_timing_rounds(metadata, rows, settings)
+        passes[name] = rows
         results.extend(timing_results(name, rows))
         pooled.extend({**row, "round": str(int(row["round"]) + offset)} for row in rows)
         offset += metadata["measured_rounds"]
@@ -226,6 +261,7 @@ def main() -> None:
     write_csv(output / "arrival-summary.csv", arrivals)
     write_report_tables(output, results, arrivals)
     plot_comparison(output, results)
+    plot_matched_rounds(output, passes)
 
 
 if __name__ == "__main__":

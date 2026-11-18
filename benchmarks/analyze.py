@@ -16,7 +16,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-matplotlib.rcParams["pdf.fonttype"] = 42
+matplotlib.rcParams.update({
+    "font.family": "STIXGeneral",
+    "mathtext.fontset": "cm",
+    "pdf.fonttype": 42,
+})
 
 
 @dataclass
